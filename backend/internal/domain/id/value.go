@@ -7,11 +7,11 @@ import (
 )
 
 type ID struct {
-	v uuid.UUID
+	Value uuid.UUID
 }
 
 func NewID() ID {
-	return ID{v: uuid.New()}
+	return ID{Value: uuid.New()}
 }
 
 // parse uuid from string
@@ -22,5 +22,9 @@ func Parse(s string) (ID, error) {
 		return ID{}, fmt.Errorf("invalid uuid format: %w", e)
 	}
 
-	return ID{v: parsed}, nil
+	return ID{Value: parsed}, nil
+}
+
+func (i ID) String() string {
+	return i.Value.String()
 }
