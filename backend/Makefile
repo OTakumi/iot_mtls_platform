@@ -17,14 +17,15 @@ LINT_TARGETS := ./...
 FORMAT_TARGETS := ./
 
 # Build artifacts
-BINARY_NAME = app
-BUILD_OUTPUT = backend/$(BINARY_NAME)
+BINARY_NAME = backend
+BUILD_OUTPUT = bin/$(BINARY_NAME)
 
 all: build
 
 build: format lint
 	@echo "==> Building application..."
-	$(GOBUILD) -o $(BUILD_OUTPUT) ./backend/main.go
+	mkdir -p bin
+	$(GOBUILD) -o $(BUILD_OUTPUT) ./main.go
 
 test: format lint
 	@echo "==> Running tests..."
