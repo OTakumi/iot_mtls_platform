@@ -14,12 +14,12 @@ func TestNow(t *testing.T) {
 
 	// Check if the returned datetime is close to the current time
 	// Allow for a small difference due to execution time
-	if dt.datetime.Before(now.Add(-time.Second)) || dt.datetime.After(now.Add(time.Second)) {
-		t.Errorf("Now() returned %v, expected a time close to %v", dt.datetime, now)
+	if dt.Value.Before(now.Add(-time.Second)) || dt.Value.After(now.Add(time.Second)) {
+		t.Errorf("Now() returned %v, expected a time close to %v", dt.Value, now)
 	}
 
 	// Ensure the time is not zero
-	if dt.datetime.IsZero() {
+	if dt.Value.IsZero() {
 		t.Errorf("Now() returned a zero time")
 	}
 }
