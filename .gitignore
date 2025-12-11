@@ -1,0 +1,22 @@
+# Environment variables
+.env
+.env.*
+
+# Docker-specific files
+docker-compose.override.yml
+*.log
+
+# Dependency directories
+node_modules/
+vendor/
+venv/
+
+# Build artifacts and cache
+build/
+dist/
+.cache/
+
+# IDE-specific files
+.idea/
+.vscode/
+*.iml
