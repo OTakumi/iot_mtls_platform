@@ -1,0 +1,114 @@
+---
+services:
+  # Auth Database (Control Plane)
+  # 機密性の高いデータ（デバイス台帳、証明書情報）を管理するDB
+  db-auth:
+    image: postgres:18-alpine
+    container_name: iot-db-auth
+    restart: always
+    environment:
+      POSTGRES_DB: ${AUTH_DB_NAME}
+      POSTGRES_USER: ${AUTH_DB_USER}
+      POSTGRES_PASSWORD: ${AUTH_DB_PASS}
+    volumes:
+      - auth_db_data:/var/lib/postgresql/data
+      - ./infra/db-auth/init:/docker-entrypoint-initdb.d
+    networks:
+      - control-plane
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AUTH_DB_USER} -d ${AUTH_DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Telemetry Database (Data Plane)
+  # 大量のセンサーデータを管理
+  db-telemetry:
+    image: postgres:18-alpine
+    container_name: iot-db-telemetry
+    restart: always
+    environment:
+      POSTGRES_DB: ${TELEM_DB_NAME}
+      POSTGRES_USER: ${TELEM_DB_USER}
+      POSTGRES_PASSWORD: ${TELEM_DB_PASS}
+    volumes:
+      - telemetry_db_data:/var/lib/postgresql/data
+      - ./infra/db-telemetry/init:/docker-entrypoint-initdb.d
+    networks:
+      - data-plane
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${TELEM_DB_USER} -d ${TELEM_DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # MQTT Broker (Communication Hub)
+  # mTLS終端を行い、メッセージを中継する
+  # mqtt-broker:
+  #   image: eclipse-mosquitto:2
+  #   container_name: iot-mqtt-broker
+  #   restart: always
+  #   ports:
+  #     - "8883:8883" # MQTTS (Secure)
+  #     # - "1883:1883" # Plain MQTT (今回は無効化推奨)
+  #   volumes:
+  #     - ./infra/mqtt/config/mosquitto.conf:/mosquitto/config/mosquitto.conf
+  #     - ./infra/mqtt/certs:/mosquitto/certs # サーバー証明書とCA証明書
+  #   networks:
+  #     - iot-network
+
+  # Backend App
+  # プロビジョニングAPI と MQTT Worker の役割を兼務
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: iot-backend
+    depends_on:
+      db-auth:
+        condition: service_healthy
+      db-telemetry:
+        condition: service_healthy
+    environment:
+      # DB Connections
+      DSN_AUTH: "host=db-auth user=${AUTH_DB_USER} password=${AUTH_DB_PASS} dbname=${AUTH_DB_NAME} port=5432 sslmode=disable"
+      DSN_TELEM: "host=db-telemetry user=${TELEM_DB_USER} password=${TELEM_DB_PASS} dbname=${TELEM_DB_NAME} port=5432 sslmode=disable"
+      # MQTT Settings
+      MQTT_BROKER_URL: "tls://mqtt-broker:8883"
+    volumes:
+      - ./infra/mqtt/certs:/app/certs # 署名用のCA鍵などへのアクセス
+    networks:
+      - control-plane # to db-auth
+      - data-plane    # to db-telemetry
+      - iot-network   # to device (API) & broker (MQTT)
+    ports:
+      - "8080:8080" # プロビジョニング用API公開
+
+  # Device Simulator
+  # 仮想的なIoTデバイス
+  # device-simulator:
+  #   build:
+  #     context: ./device
+  #     dockerfile: Dockerfile
+  #   container_name: iot-device-1
+  #   environment:
+  #     PROVISIONING_API_URL: "http://backend:8080/api/provision"
+  #     MQTT_BROKER_HOST: "mqtt-broker"
+  #     MQTT_BROKER_PORT: "8883"
+  #   networks:
+  #     - iot-network # DBには直接アクセスできない
+  #   depends_on:
+  #     - backend
+  #     - mqtt-broker
+
+networks:
+  control-plane:
+    internal: true # 外部インターネットへの露出制限
+  data-plane:
+    internal: true
+  iot-network:
+    driver: bridge
+
+volumes:
+  auth_db_data:
+  telemetry_db_data:
