@@ -1,18 +1,19 @@
 ---
 services:
+  # Auth, Telemetry DBは外部ネットワークからアクセスできない設定とする
   # Auth Database (Control Plane)
-  # 機密性の高いデータ（デバイス台帳、証明書情報）を管理するDB
   db-auth:
-    image: postgres:18-alpine
+    build: ./infra/db-auth
     container_name: iot-db-auth
     restart: always
+    ports:
+      - 5432:5432
     environment:
       POSTGRES_DB: ${AUTH_DB_NAME}
       POSTGRES_USER: ${AUTH_DB_USER}
       POSTGRES_PASSWORD: ${AUTH_DB_PASS}
     volumes:
       - auth_db_data:/var/lib/postgresql/data
-      - ./infra/db-auth/init:/docker-entrypoint-initdb.d
     networks:
       - control-plane
     healthcheck:
@@ -22,18 +23,18 @@ services:
       retries: 5
 
   # Telemetry Database (Data Plane)
-  # 大量のセンサーデータを管理
   db-telemetry:
-    image: postgres:18-alpine
+    build: ./infra/db-telemetry
     container_name: iot-db-telemetry
     restart: always
+    ports:
+      - 5432:5432
     environment:
       POSTGRES_DB: ${TELEM_DB_NAME}
       POSTGRES_USER: ${TELEM_DB_USER}
       POSTGRES_PASSWORD: ${TELEM_DB_PASS}
     volumes:
       - telemetry_db_data:/var/lib/postgresql/data
-      - ./infra/db-telemetry/init:/docker-entrypoint-initdb.d
     networks:
       - data-plane
     healthcheck:
@@ -84,6 +85,30 @@ services:
     ports:
       - "8080:8080" # プロビジョニング用API公開
 
+  # pgAdmin (DB Management GUI)
+  # DBが外部ネットワークに公開されていないため、DBと同一ネットワーク内で起動し、
+  # DBの内容が確認できるようにする
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: iot-pgadmin
+    restart: always
+    environment:
+      # pgAdminのWeb UIにログインするための情報
+      PGADMIN_DEFAULT_EMAIL: "admin@example.com"
+      PGADMIN_DEFAULT_PASSWORD: "admin"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    ports:
+      # ホストマシンの5050番ポートをpgAdminの80番ポートにマッピング
+      - "5050:80"
+    networks:
+      - control-plane # db-authと同じネットワーク
+      - data-plane    # db-telemetryと同じネットワーク
+      - iot-network   # ホストにポートを公開するため
+    depends_on:
+      - db-auth
+      - db-telemetry
+
   # Device Simulator
   # 仮想的なIoTデバイス
   # device-simulator:
@@ -101,14 +126,37 @@ services:
   #     - backend
   #     - mqtt-broker
 
+  # Database Migrators
+  # pgAdmin同様、DBと同じネットワークで起動し、マイグレーションを実行する
+  auth-migrator:
+    build:
+      context: .
+      dockerfile: ./infra/auth-migrator/Dockerfile
+    networks:
+      - control-plane
+    entrypoint: ["migrate", "-path", "/migrations", "-database", "postgres://${AUTH_DB_USER}:${AUTH_DB_PASS}@db-auth:5432/${AUTH_DB_NAME}?sslmode=disable"]
+    depends_on:
+      - db-auth
+
+  telemetry-migrator:
+    build:
+      context: .
+      dockerfile: ./infra/telemetry-migrator/Dockerfile
+    networks:
+      - data-plane
+    entrypoint: ["migrate", "-path", "/migrations", "-database", "postgres://${TELEM_DB_USER}:${TELEM_DB_PASS}@db-telemetry:5432/${TELEM_DB_NAME}?sslmode=disable"]
+    depends_on:
+      - db-telemetry
+
 networks:
   control-plane:
-    internal: true # 外部インターネットへの露出制限
+    internal: true  # 外部インターネットへの公開を制限
   data-plane:
-    internal: true
+    internal: true  # 外部インターネットへの公開を制限
   iot-network:
     driver: bridge
 
 volumes:
   auth_db_data:
   telemetry_db_data:
+  pgadmin_data:   # pgAdminの設定を永続化するためのボリューム
