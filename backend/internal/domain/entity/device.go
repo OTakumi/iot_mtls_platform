@@ -4,8 +4,8 @@ import (
 	"errors"
 	"time"
 
-	"backend/internal/domain/datetime"
-	"backend/internal/domain/id"
+	"backend/internal/domain/VO/datetime"
+	"backend/internal/domain/VO/id"
 
 	"github.com/google/uuid"
 )
