@@ -5,10 +5,10 @@
 まずはコードを動かすための環境を構築する。
 物理分割したDB構成を立ち上げる。
 
-- 1-1. Docker Compose整備:
+- [x] 1-1. Docker Compose整備:
   - db-auth (PostgreSQL), db-telemetry (PostgreSQL), backend (Go) の3つが起動し、ネットワーク疎通できる状態にする。
 
-- 1-2. DBマイグレーション:
+- [x] 1-2. DBマイグレーション:
   - 以前作成したER図に基づき、それぞれのDBにテーブルを作成するSQL（またはGo migrate）を用意し、起動時に適用されるようにする。
 
 - 1-3. リポジトリ実装 (Go):
