@@ -151,4 +151,3 @@ func TestNewDevice(t *testing.T) {
 		}
 	})
 }
-
