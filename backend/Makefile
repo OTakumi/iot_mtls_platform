@@ -25,7 +25,7 @@ all: build
 build: format lint
 	@echo "==> Building application..."
 	mkdir -p bin
-	$(GOBUILD) -o $(BUILD_OUTPUT) ./main.go
+	$(GOBUILD) -o $(BUILD_OUTPUT) ./cmd/server/main.go
 
 test: format lint
 	@echo "==> Running tests..."
