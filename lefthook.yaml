@@ -1,0 +1,12 @@
+---
+pre-commit:
+  jobs:
+    - name: build backend
+      glob: backend/**/*.go
+      run: cd backend && make build && cd ../
+
+pre-push:
+  jobs:
+    - name: run backend unittests
+      glob: backend/**/*.go
+      run: cd backend && make test && cd ../
