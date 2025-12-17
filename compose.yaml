@@ -43,6 +43,28 @@ services:
       timeout: 5s
       retries: 5
 
+  # Test Database
+  db-test:
+    image: postgres:15-alpine
+    container_name: iot-db-test
+    restart: always
+    ports:
+      - 5433:5432
+    environment:
+      POSTGRES_DB: ${TEST_DB_NAME}
+      POSTGRES_USER: ${TEST_DB_USER}
+      POSTGRES_PASSWORD: ${TEST_DB_PASS}
+    volumes:
+      - test_db_data:/var/lib/postgresql/data
+    networks:
+      - control-plane
+      - iot-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${TEST_DB_USER} -d ${TEST_DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   # MQTT Broker (Communication Hub)
   # mTLS終端を行い、メッセージを中継する
   # mqtt-broker:
@@ -160,3 +182,4 @@ volumes:
   auth_db_data:
   telemetry_db_data:
   pgadmin_data:   # pgAdminの設定を永続化するためのボリューム
+  test_db_data:
