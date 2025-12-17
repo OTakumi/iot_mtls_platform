@@ -1,7 +1,0 @@
-database:
-  host: "localhost"
-  port: 5433
-  user: "testuser"
-  password: "testpassword"
-  dbname: "iot_platform_test"
-  sslmode: "disable"
