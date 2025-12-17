@@ -20,7 +20,7 @@ func TestNewDevice(t *testing.T) {
 	type want struct {
 		hardwareID string
 		name       string
-		metadata   map[string]any
+		metadata   JSONBMap
 		id         uuid.UUID
 	}
 
@@ -71,7 +71,7 @@ func TestNewDevice(t *testing.T) {
 			want: want{
 				hardwareID: "test-hw-id-1",
 				name:       "test-device-1",
-				metadata:   map[string]any{"key": "value"},
+				metadata:   JSONBMap{"key": "value"},
 				id:         uuid.Nil,
 			},
 			wantErr: false,
@@ -87,7 +87,7 @@ func TestNewDevice(t *testing.T) {
 			want: want{
 				hardwareID: "test-hw-id-2",
 				name:       "",
-				metadata:   map[string]any{},
+				metadata:   JSONBMap{},
 				id:         uuid.Nil,
 			},
 			wantErr: false,
@@ -103,7 +103,7 @@ func TestNewDevice(t *testing.T) {
 			want: want{
 				hardwareID: "test-hw-id-3",
 				name:       "env-sensor-1",
-				metadata:   complexMetadata,
+				metadata:   JSONBMap(complexMetadata),
 				id:         uuid.Nil,
 			},
 			wantErr: false,

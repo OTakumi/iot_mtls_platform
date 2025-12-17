@@ -22,25 +22,26 @@ type Device struct {
 	// デバイスによって異なる情報が入力される
 	// このmetadataの内容を検索対象とすることも考えられるため、json形式で保存できるようにする
 	// デフォルト値は空のjson {}
-	Metadata map[string]any `gorm:"type:jsonb;default:'{}'"`
+	Metadata JSONBMap `gorm:"type:jsonb;default:'{}'"`
 
 	// CreatedAt, UpdatedAtという命名にすることでGORMが自動でタイムスタンプを追加する
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
 
-func NewDevice(hardwareId string, name *string, metadata map[string]interface{}) (*Device, error) {
+func NewDevice(hardwareId string, name *string, metadata map[string]any) (*Device, error) {
 	if hardwareId == "" {
 		return nil, errors.New("hardware id cannot be empty")
 	}
 
-	if metadata == nil {
-		metadata = make(map[string]interface{})
+	newMetadata := make(JSONBMap)
+	for k, v := range metadata {
+		newMetadata[k] = v
 	}
 
 	newDevice := &Device{
 		HardwareID: hardwareId,
-		Metadata:   metadata,
+		Metadata:   newMetadata,
 	}
 
 	if name != nil {
