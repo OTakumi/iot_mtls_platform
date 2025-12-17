@@ -403,6 +403,7 @@ func TestUpdateDevice(t *testing.T) {
 // DeleteDeviceメソッドのテスト
 func TestDeleteDevice(t *testing.T) {
 	ctx := context.Background()
+
 	testID := uuid.New()
 
 	type args struct {
@@ -421,17 +422,45 @@ func TestDeleteDevice(t *testing.T) {
 		{
 			name: "正常系: デバイスを削除する",
 			desc: "存在するデバイスIDを指定して、デバイスが正常に削除されることを確認する",
-			args: args{id: testID},
+			args: args{id: testID}, // testID を使用
 			setupMock: func(repo *MockDeviceRepository, args args) {
+				// FindByIDが成功してデバイスを返すようにモック
+				repo.On("FindByID", ctx, args.id).Return(&entity.Device{ID: args.id}, nil).Once()
+				// Deleteが成功するようにモック
 				repo.On("Delete", ctx, args.id).Return(nil).Once()
 			},
 			wantErr: false,
 		},
 		{
-			name: "異常系: リポジトリがエラーを返す",
+			name: "異常系: 削除対象のデバイスが見つからない",
+			desc: "デバイスが見つからなかった場合に'device not found'エラーが返されることを確認する",
+			args: args{id: uuid.New()}, // 新しいユニークなIDを使用
+			setupMock: func(repo *MockDeviceRepository, args args) {
+				// FindByIDがnilとnilエラーを返すようにモック (デバイスが見つからない場合)
+				repo.On("FindByID", ctx, args.id).Return(nil, nil).Once()
+			},
+			wantErr:    true,
+			wantErrMsg: "device not found",
+		},
+		{
+			name: "異常系: FindByIDがエラーを返す",
+			desc: "FindByIDメソッドがエラーを返した場合、ユースケースもそのエラーを返すことを確認する",
+			args: args{id: uuid.New()}, // 新しいユニークなIDを使用
+			setupMock: func(repo *MockDeviceRepository, args args) {
+				// FindByIDがエラーを返すようにモック
+				repo.On("FindByID", ctx, args.id).Return(nil, errors.New("FindByID db error")).Once()
+			},
+			wantErr:    true,
+			wantErrMsg: "FindByID db error",
+		},
+		{
+			name: "異常系: Deleteがエラーを返す",
 			desc: "リポジトリのDeleteメソッドがエラーを返した場合、ユースケースもエラーを返すことを確認する",
 			args: args{id: testID},
 			setupMock: func(repo *MockDeviceRepository, args args) {
+				// FindByIDが成功してデバイスを返すようにモック
+				repo.On("FindByID", ctx, args.id).Return(&entity.Device{ID: args.id}, nil).Once()
+				// Deleteがエラーを返すようにモック
 				repo.On("Delete", ctx, args.id).Return(errors.New("db delete error")).Once()
 			},
 			wantErr:    true,
