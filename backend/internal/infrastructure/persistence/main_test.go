@@ -6,7 +6,6 @@ import (
 	"os"
 	"testing"
 
-	"backend/internal/pkg/config"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
@@ -38,24 +37,17 @@ func TestMain(m *testing.M) {
 }
 
 func setupTestDatabase() error {
-	// 設定の読み込み
-	// ../../config を指定して config.test.yaml を見つける
-	// 修正: ../../config -> ../../../config
-	cfg, err := config.LoadDBConfig("../../../config", "config.test")
-	if err != nil {
-		return fmt.Errorf("設定ファイルの読み込みに失敗: %w", err)
+	// 環境変数からテストDBのDSNを取得
+	dsnTest := os.Getenv("DSN_TEST")
+	if dsnTest == "" {
+		return fmt.Errorf("環境変数 DSN_TEST が設定されていません")
 	}
 
-	// DSNを構築
-	dsn := cfg.DSN()
-	migrateDSN := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s", cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.DBName, cfg.SSLMode)
-
 	// マイグレーションの実行
-	// ../../../infra/db-auth/migrations を指定
-	// 修正: ../../../infra/db-auth/migrations -> ../../../../infra/db-auth/migrations
 	migrationURL := "file://../../../../infra/db-auth/migrations"
 
-	mi, err := migrate.New(migrationURL, migrateDSN)
+	// migrate.New の第二引数に dsnTest を直接使用
+	mi, err := migrate.New(migrationURL, dsnTest)
 	if err != nil {
 		return fmt.Errorf("migrateインスタンスの作成に失敗: %w", err)
 	}
@@ -69,7 +61,8 @@ func setupTestDatabase() error {
 	}
 
 	// GORMでのDB接続
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	// ロガー設定なしのシンプルな GORM 設定
+	db, err := gorm.Open(postgres.Open(dsnTest), &gorm.Config{})
 	if err != nil {
 		return fmt.Errorf("DBへの接続に失敗: %w", err)
 	}
