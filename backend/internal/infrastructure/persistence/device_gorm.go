@@ -3,7 +3,6 @@ package persistence
 
 import (
 	"context"
-	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -70,12 +69,5 @@ func (r *DeviceGormRepository) FindAll(ctx context.Context) ([]*entity.Device, e
 func (r *DeviceGormRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	// IDでレコードを削除
 	// 削除対象が見つからない場合もエラーとしない (DeletedAtを使用していないため)
-	return r.db.WithContext(ctx).Delete(&entity.Device{
-		ID:         uuid.Nil,
-		HardwareID: "",
-		Name:       "",
-		Metadata:   nil,
-		CreatedAt:  time.Time{},
-		UpdatedAt:  time.Time{},
-	}, "id = ?", id).Error
+	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&entity.Device{}).Error //nolint:exhaustruct
 }
