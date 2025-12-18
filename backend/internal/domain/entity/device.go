@@ -1,38 +1,55 @@
-package domain
+// Package entity defines the domain entities.
+package entity
 
 import (
-	"errors"
+	"maps"
 	"time"
-
-	"backend/internal/domain/VO/datetime"
-	"backend/internal/domain/VO/id"
 
 	"github.com/google/uuid"
 )
 
+// Device represents a device entity, with HardwareID being mandatory and Name and Metadata being optional.
 type Device struct {
-	id          uuid.UUID
-	hardware_id string
-	name        string
-	metadata    []string
-	created_at  time.Time
+	ID uuid.UUID `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
+
+	// HardwareID is a unique identifier for the device.
+	// e.g., MAC address or serial number.
+	HardwareID string `gorm:"uniqueIndex;not null;column:hardware_id"`
+
+	// Name is an optional, user-friendly name for the device.
+	Name string `gorm:"default:null"`
+
+	// Metadata contains device-specific information, such as specifications,
+	// installation location, and firmware version.
+	// Its content is searchable, so it is stored in JSONB format.
+	// Defaults to an empty JSON object '{}'.
+	Metadata JSONBMap `gorm:"type:jsonb;default:'{}'"`
+
+	// CreatedAt and UpdatedAt are automatically managed by GORM.
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
-func NewDevice(hardware_id string, name string, metadata []string) (Device, error) {
-	if hardware_id == "" {
-		return Device{}, errors.New("hardware id cannot be empty")
+// NewDevice creates a new Device.
+func NewDevice(hardwareID string, name *string, metadata map[string]any) (*Device, error) {
+	if hardwareID == "" {
+		return nil, ErrHardwareIDEmpty
 	}
 
-	if name == "" {
-		return Device{}, errors.New("name cannot be empty")
+	newMetadata := make(JSONBMap)
+	maps.Copy(newMetadata, metadata)
+
+	newDevice := &Device{
+		ID:         uuid.Nil,
+		HardwareID: hardwareID,
+		Name:       "", // Default to an empty string, to be overwritten if a name is provided.
+		Metadata:   newMetadata,
+		CreatedAt:  time.Time{},
+		UpdatedAt:  time.Time{},
 	}
 
-	newDevice := Device{
-		id:          id.NewID().Value,
-		hardware_id: hardware_id,
-		name:        name,
-		metadata:    metadata,
-		created_at:  datetime.Now().Value,
+	if name != nil {
+		newDevice.Name = *name
 	}
 
 	return newDevice, nil
