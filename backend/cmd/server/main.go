@@ -1,8 +1,14 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"log"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"backend/internal/infrastructure/persistence"
 	"backend/internal/presentation/handler"
@@ -14,9 +20,16 @@ import (
 	"gorm.io/gorm/logger"
 )
 
+const (
+	defaultServerPort       = ":8080"
+	dbMaxIdleConns          = 10
+	dbMaxOpenConns          = 100
+	serverShutdownTimeout   = 5 * time.Second
+	serverReadHeaderTimeout = 10 * time.Second
+)
+
 func main() {
 	// --- データベース接続の初期化 ---
-	// 環境変数からDB接続情報を取得
 	dsnAuth := os.Getenv("DSN_AUTH")
 	if dsnAuth == "" {
 		log.Fatal("environment variable DSN_AUTH is not set")
@@ -29,6 +42,16 @@ func main() {
 		log.Fatalf("failed to connect database: %v", err)
 	}
 
+	// --- データベース接続プールの設定 ---
+	sqlDB, err := db.DB()
+	if err != nil {
+		log.Fatalf("failed to get underlying sql.DB: %v", err)
+	}
+
+	sqlDB.SetMaxIdleConns(dbMaxIdleConns)
+	sqlDB.SetMaxOpenConns(dbMaxOpenConns)
+	sqlDB.SetConnMaxLifetime(time.Hour)
+
 	// --- 依存関係の注入 (Dependency Injection) ---
 	deviceRepo := persistence.NewDeviceGormRepository(db)
 	deviceUsecase := usecase.NewDeviceUsecase(deviceRepo)
@@ -36,6 +59,18 @@ func main() {
 
 	// --- Ginルーターのセットアップ ---
 	router := gin.Default()
+
+	// ヘルスチェック用エンドポイント
+	router.GET("/health", func(c *gin.Context) {
+		err := sqlDB.PingContext(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "unhealthy", "error": err.Error()})
+
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"status": "healthy"})
+	})
 
 	// デバイス関連のエンドポイントをグループ化
 	deviceRoutes := router.Group("/devices")
@@ -47,10 +82,39 @@ func main() {
 		deviceRoutes.DELETE("/:id", deviceHandler.DeleteDevice)
 	}
 
-	// --- サーバーの起動 ---
-	log.Println("Server starting on port 8080...")
-
-	if err := router.Run(":8080"); err != nil { //nolint:noinlineerr
-		log.Fatalf("failed to start server: %v", err)
+	// --- サーバーのグレースフルシャットダウン ---
+	srv := &http.Server{ //nolint:exhaustruct
+		Addr:              defaultServerPort,
+		Handler:           router,
+		ReadHeaderTimeout: serverReadHeaderTimeout,
 	}
+
+	// サーバーをゴルーチンで起動
+	go func() {
+		log.Println("Server starting on port", defaultServerPort, "...")
+
+		err = srv.ListenAndServe()
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("listen: %s\n", err)
+		}
+	}()
+
+	// OSのシグナルを待機 (Graceful shutdown)
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Println("Shutting down server...")
+
+	// タイムアウト付きコンテキストでシャットダウン処理
+	ctx, cancel := context.WithTimeout(context.Background(), serverShutdownTimeout)
+	defer cancel() // defer ensures cancel is called
+
+	err = srv.Shutdown(ctx) // noinlineerr: avoid inline error handling
+	if err != nil {
+		log.Printf("Server forced to shutdown: %v", err)
+		// Explicitly call cancel before os.Exit to ensure deferred cleanup runs
+		cancel()
+	}
+
+	log.Println("Server exiting")
 }
