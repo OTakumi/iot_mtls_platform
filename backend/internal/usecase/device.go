@@ -30,6 +30,8 @@ type deviceUsecase struct {
 }
 
 // NewDeviceUsecase deviceUsecaseの新しいインスタンスを生成.
+//
+//nolint:ireturn
 func NewDeviceUsecase(repo repository.DeviceRepository) DeviceUsecase {
 	return &deviceUsecase{deviceRepo: repo}
 }
@@ -51,7 +53,7 @@ func (uc *deviceUsecase) CreateDevice(ctx context.Context, input CreateDeviceInp
 	// リポジトリを介して保存
 	err = uc.deviceRepo.Save(ctx, device)
 	if err != nil {
-		return nil, fmt.Errorf("failed to save device: %w", err) // DB保存時のエラー
+		return nil, fmt.Errorf("%w: %w", ErrRepositorySave, err)
 	}
 
 	return NewDeviceOutput(device), nil // 出力DTOに変換して返す
@@ -61,7 +63,7 @@ func (uc *deviceUsecase) CreateDevice(ctx context.Context, input CreateDeviceInp
 func (uc *deviceUsecase) GetDevice(ctx context.Context, id uuid.UUID) (*DeviceOutput, error) {
 	device, err := uc.deviceRepo.FindByID(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to find device by ID: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrFindByIDDB, err)
 	}
 
 	if device == nil {
@@ -75,7 +77,7 @@ func (uc *deviceUsecase) GetDevice(ctx context.Context, id uuid.UUID) (*DeviceOu
 func (uc *deviceUsecase) ListDevices(ctx context.Context) ([]*DeviceOutput, error) {
 	devices, err := uc.deviceRepo.FindAll(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to find all devices: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrDBFindAll, err)
 	}
 
 	outputs := make([]*DeviceOutput, 0, len(devices))
@@ -92,7 +94,7 @@ func (uc *deviceUsecase) UpdateDevice(ctx context.Context, input UpdateDeviceInp
 	// 更新対象のDeviceを検索
 	device, err := uc.deviceRepo.FindByID(ctx, input.ID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to find device by ID for update: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrFindByIDDB, err)
 	}
 
 	if device == nil {
@@ -114,7 +116,7 @@ func (uc *deviceUsecase) UpdateDevice(ctx context.Context, input UpdateDeviceInp
 	// リポジトリを介して更新
 	err = uc.deviceRepo.Save(ctx, device)
 	if err != nil {
-		return nil, fmt.Errorf("failed to update device: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrRepositorySave, err)
 	}
 
 	return NewDeviceOutput(device), nil
@@ -125,7 +127,7 @@ func (uc *deviceUsecase) DeleteDevice(ctx context.Context, id uuid.UUID) error {
 	// 削除対象の存在チェック
 	device, err := uc.deviceRepo.FindByID(ctx, id)
 	if err != nil {
-		return fmt.Errorf("failed to find device by ID for deletion: %w", err) // FindByIDで発生したエラーを返す
+		return fmt.Errorf("%w: %w", ErrFindByIDDB, err)
 	}
 
 	if device == nil {
@@ -135,7 +137,7 @@ func (uc *deviceUsecase) DeleteDevice(ctx context.Context, id uuid.UUID) error {
 	// デバイスが存在する場合のみ削除を実行
 	err = uc.deviceRepo.Delete(ctx, id)
 	if err != nil {
-		return fmt.Errorf("failed to delete device: %w", err)
+		return fmt.Errorf("%w: %w", ErrDBDelete, err)
 	}
 
 	return nil
