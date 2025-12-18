@@ -8,21 +8,31 @@ import (
 	"backend/internal/domain/entity"
 )
 
-// Device作成用の入力データ
+// CreateDeviceInput is the input data for creating a Device.
 type CreateDeviceInput struct {
 	HardwareID string         // 必須
 	Name       string         // オプショナル
 	Metadata   map[string]any // オプショナル
 }
 
-// Device更新用の入力データ
+// UpdateDeviceInput is the input data for updating a Device.
 type UpdateDeviceInput struct {
 	ID       uuid.UUID
 	Name     *string        // オプショナル、nilで渡された場合は更新しない
 	Metadata map[string]any // オプショナル、nilで渡された場合は更新しない
 }
 
-// エンティティから出力DTOを生成
+// DeviceOutput is the output data for displaying Device information.
+type DeviceOutput struct {
+	ID         uuid.UUID      `json:"id"`
+	HardwareID string         `json:"hardwareId"`
+	Name       string         `json:"name,omitempty"`
+	Metadata   map[string]any `json:"metadata,omitempty"`
+	CreatedAt  time.Time      `json:"createdAt"`
+	UpdatedAt  time.Time      `json:"updatedAt"`
+}
+
+// NewDeviceOutput creates a new DeviceOutput from an entity.
 func NewDeviceOutput(device *entity.Device) *DeviceOutput {
 	return &DeviceOutput{
 		ID:         device.ID,
@@ -32,14 +42,4 @@ func NewDeviceOutput(device *entity.Device) *DeviceOutput {
 		CreatedAt:  device.CreatedAt,
 		UpdatedAt:  device.UpdatedAt,
 	}
-}
-
-// Device情報を表示するための出力データ
-type DeviceOutput struct {
-	ID         uuid.UUID      `json:"id"`
-	HardwareID string         `json:"hardware_id"`
-	Name       string         `json:"name,omitempty"`
-	Metadata   map[string]any `json:"metadata,omitempty"`
-	CreatedAt  time.Time      `json:"created_at"`
-	UpdatedAt  time.Time      `json:"updated_at"`
 }

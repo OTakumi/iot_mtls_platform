@@ -1,3 +1,4 @@
+// Package repository defines the repository interfaces.
 package repository
 
 import (
@@ -7,7 +8,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// DeviceRepository Deviceエンティティの永続化を抽象化するインターフェース
+// DeviceRepository Deviceエンティティの永続化を抽象化するインターフェース.
 type DeviceRepository interface {
 	// 新しいDeviceエンティティを保存または既存のエンティティを更新
 	Save(ctx context.Context, device *entity.Device) error

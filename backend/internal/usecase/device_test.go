@@ -2,491 +2,645 @@ package usecase_test
 
 import (
 	"context"
-	"errors"
+	"sort"
+	"sync"
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-
 	"backend/internal/domain/entity"
 	"backend/internal/usecase"
+
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-// DeviceRepositoryインターフェースのモック実装
-type MockDeviceRepository struct {
-	mock.Mock
+// FakeDeviceRepository is an in-memory implementation of the DeviceRepository for testing.
+type FakeDeviceRepository struct {
+	mu      sync.RWMutex
+	devices map[uuid.UUID]*entity.Device
+	// for controlling error case
+	SaveErr    error
+	FindErr    error
+	FindAllErr error
+	DeleteErr  error
 }
 
-// モックされたSaveメソッド
-func (m *MockDeviceRepository) Save(ctx context.Context, device *entity.Device) error {
-	args := m.Called(ctx, device)
-	return args.Error(0)
-}
-
-// モックされたFindByIDメソッド
-func (m *MockDeviceRepository) FindByID(ctx context.Context, id uuid.UUID) (*entity.Device, error) {
-	args := m.Called(ctx, id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
+// NewFakeDeviceRepository creates a new FakeDeviceRepository.
+func NewFakeDeviceRepository() *FakeDeviceRepository {
+	return &FakeDeviceRepository{
+		mu:         sync.RWMutex{},
+		devices:    make(map[uuid.UUID]*entity.Device),
+		SaveErr:    nil,
+		FindErr:    nil,
+		FindAllErr: nil,
+		DeleteErr:  nil,
 	}
-	return args.Get(0).(*entity.Device), args.Error(1)
 }
 
-// モックされたFindByHardwareIDメソッド
-func (m *MockDeviceRepository) FindByHardwareID(ctx context.Context, hardwareID string) (*entity.Device, error) {
-	args := m.Called(ctx, hardwareID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
+// Save adds or updates a device in the in-memory store.
+func (r *FakeDeviceRepository) Save(_ context.Context, device *entity.Device) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.SaveErr != nil {
+		return r.SaveErr
 	}
-	return args.Get(0).(*entity.Device), args.Error(1)
-}
 
-// モックされたFindAllメソッド
-func (m *MockDeviceRepository) FindAll(ctx context.Context) ([]*entity.Device, error) {
-	args := m.Called(ctx)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
+	if device.ID == uuid.Nil {
+		device.ID = uuid.New()
 	}
-	return args.Get(0).([]*entity.Device), args.Error(1)
+
+	r.devices[device.ID] = device
+
+	return nil
 }
 
-// モックされたDeleteメソッド
-func (m *MockDeviceRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
-	return args.Error(0)
+// FindByID retrieves a device by its ID from the in-memory store.
+func (r *FakeDeviceRepository) FindByID(_ context.Context, id uuid.UUID) (*entity.Device, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if r.FindErr != nil {
+		return nil, r.FindErr
+	}
+
+	device, ok := r.devices[id]
+	if !ok {
+		return nil, entity.ErrDeviceNotFound
+	}
+
+	return device, nil
 }
 
-// CreateDeviceメソッドのテスト
+// FindByHardwareID retrieves a device by its hardware ID from the in-memory store.
+func (r *FakeDeviceRepository) FindByHardwareID(_ context.Context, hardwareID string) (*entity.Device, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if r.FindErr != nil {
+		return nil, r.FindErr
+	}
+
+	for _, device := range r.devices {
+		if device.HardwareID == hardwareID {
+			return device, nil
+		}
+	}
+
+	return nil, entity.ErrDeviceNotFound
+}
+
+// FindAll retrieves all devices from the in-memory store.
+func (r *FakeDeviceRepository) FindAll(_ context.Context) ([]*entity.Device, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if r.FindAllErr != nil {
+		return nil, r.FindAllErr
+	}
+
+	devices := make([]*entity.Device, 0, len(r.devices))
+	for _, device := range r.devices {
+		devices = append(devices, device)
+	}
+
+	return devices, nil
+}
+
+// Delete removes a device from the in-memory store.
+func (r *FakeDeviceRepository) Delete(_ context.Context, id uuid.UUID) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.DeleteErr != nil {
+		return r.DeleteErr
+	}
+
+	if _, ok := r.devices[id]; !ok {
+		return entity.ErrDeviceNotFound
+	}
+
+	delete(r.devices, id)
+
+	return nil
+}
+
+// TestCreateDevice tests the CreateDevice method.
 func TestCreateDevice(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
-	type args struct {
-		input usecase.CreateDeviceInput
-	}
-	type want struct {
-		output *usecase.DeviceOutput
-	}
-	type mockSetup func(repo *MockDeviceRepository)
-
 	tests := []struct {
-		name       string
-		desc       string
-		args       args
-		setupMock  mockSetup
-		want       want
-		wantErr    bool
-		wantErrMsg string
+		name          string
+		desc          string
+		input         usecase.CreateDeviceInput
+		repoSetup     func(*FakeDeviceRepository)
+		wantOutput    *usecase.DeviceOutput
+		wantErr       bool
+		wantErrString string
 	}{
 		{
-			name: "正常系: 新しいデバイスを作成する",
-			desc: "正常な入力で新しいデバイスが作成され、対応する出力DTOが返されることを確認する",
-			args: args{
-				input: usecase.CreateDeviceInput{
-					HardwareID: "hw-create-001",
-					Name:       "テストデバイス C",
-					Metadata:   map[string]any{"os": "linux"},
-				},
+			name: "success: create a new device",
+			desc: "Verify that a new device is created and a corresponding output DTO is returned with valid input.",
+			input: usecase.CreateDeviceInput{
+				HardwareID: "hw-create-001",
+				Name:       "Test Device C",
+				Metadata:   map[string]any{"os": "linux"},
 			},
-			setupMock: func(repo *MockDeviceRepository) {
-				// モックのSaveはIDを変更すべきではないため、Run関数を削除
-				repo.On("Save", ctx, mock.AnythingOfType("*entity.Device")).
-					Return(nil).
-					Once()
+			repoSetup: nil, // No setup needed for success case
+			wantOutput: &usecase.DeviceOutput{
+				ID:         uuid.Nil, // ID is generated by the repository
+				HardwareID: "hw-create-001",
+				Name:       "Test Device C",
+				Metadata:   map[string]any{"os": "linux"},
+				CreatedAt:  time.Time{}, // Not checked in this test
+				UpdatedAt:  time.Time{}, // Not checked in this test
 			},
-			want: want{
-				output: &usecase.DeviceOutput{
-					HardwareID: "hw-create-001",
-					Name:       "テストデバイス C",
-					Metadata:   map[string]any{"os": "linux"},
-				},
-			},
-			wantErr: false,
+			wantErr:       false,
+			wantErrString: "",
 		},
 		{
-			name: "異常系: リポジトリがエラーを返す",
-			desc: "リポジトリのSaveメソッドがエラーを返した場合、ユースケースもエラーを返すことを確認する",
-			args: args{
-				input: usecase.CreateDeviceInput{
-					HardwareID: "hw-err-001",
-					Name:       "エラーデバイス",
-				},
+			name: "failure: repository returns an error",
+			desc: "Verify that the use case returns an error when the repository's Save method returns an error.",
+			input: usecase.CreateDeviceInput{
+				HardwareID: "hw-err-001",
+				Name:       "Error Device",
+				Metadata:   nil,
 			},
-			setupMock: func(repo *MockDeviceRepository) {
-				repo.On("Save", ctx, mock.AnythingOfType("*entity.Device")).Return(errors.New("repository save error")).Once()
+			repoSetup: func(repo *FakeDeviceRepository) {
+				repo.SaveErr = usecase.ErrRepositorySave
 			},
-			want:       want{output: nil},
-			wantErr:    true,
-			wantErrMsg: "repository save error",
+			wantOutput:    nil,
+			wantErr:       true,
+			wantErrString: "repository save error",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockRepo := new(MockDeviceRepository)
-			uc := usecase.NewDeviceUsecase(mockRepo)
+			t.Parallel()
 
-			if tt.setupMock != nil {
-				tt.setupMock(mockRepo)
+			fakeRepo := NewFakeDeviceRepository()
+			if tt.repoSetup != nil {
+				tt.repoSetup(fakeRepo)
 			}
 
-			got, err := uc.CreateDevice(ctx, tt.args.input)
+			uc := usecase.NewDeviceUsecase(fakeRepo)
+
+			got, err := uc.CreateDevice(ctx, tt.input)
 
 			if tt.wantErr {
-				assert.Error(t, err)
-				assert.EqualError(t, err, tt.wantErrMsg)
-				assert.Equal(t, tt.want.output, got)
-				mockRepo.AssertExpectations(t)
-				return
-			}
+				require.Error(t, err)
 
-			assert.NoError(t, err)
-			assert.NotNil(t, got)
+				if tt.wantErrString != "" {
+					require.Contains(t, err.Error(), tt.wantErrString)
+				}
 
-			assert.Equal(t, tt.want.output.HardwareID, got.HardwareID)
-			assert.Equal(t, tt.want.output.Name, got.Name)
-			assert.Equal(t, tt.want.output.Metadata, got.Metadata)
-			assert.Equal(t, uuid.Nil, got.ID) // IDはDB側で生成されるため、ユースケース層が返すIDはuuid.Nilであることを期待
-
-			mockRepo.AssertExpectations(t)
-		})
-	}
-}
-
-// GetDeviceメソッドのテスト
-func TestGetDevice(t *testing.T) {
-	ctx := context.Background()
-	testID := uuid.New()
-
-	type args struct {
-		id uuid.UUID
-	}
-	type want struct {
-		output *usecase.DeviceOutput
-	}
-	type mockSetup func(repo *MockDeviceRepository, args args)
-
-	tests := []struct {
-		name       string
-		desc       string
-		args       args
-		setupMock  mockSetup
-		want       want
-		wantErr    bool
-		wantErrMsg string
-	}{
-		{
-			name: "正常系: 既存のデバイスを取得する",
-			desc: "存在するIDでデバイスを正常に取得できることを確認する",
-			args: args{id: testID},
-			setupMock: func(repo *MockDeviceRepository, args args) {
-				repo.On("FindByID", ctx, args.id).Return(&entity.Device{
-					ID:         args.id,
-					HardwareID: "hw-get-001",
-					Name:       "取得デバイス",
-				}, nil).Once()
-			},
-			want: want{
-				output: &usecase.DeviceOutput{
-					ID:         testID,
-					HardwareID: "hw-get-001",
-					Name:       "取得デバイス",
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "異常系: デバイスが見つからない",
-			desc: "存在しないIDで検索した場合に、'device not found'エラーが返されることを確認する",
-			args: args{id: uuid.New()},
-			setupMock: func(repo *MockDeviceRepository, args args) {
-				repo.On("FindByID", ctx, args.id).Return(nil, nil).Once()
-			},
-			want:       want{output: nil},
-			wantErr:    true,
-			wantErrMsg: "device not found",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			mockRepo := new(MockDeviceRepository)
-			uc := usecase.NewDeviceUsecase(mockRepo)
-
-			if tt.setupMock != nil {
-				tt.setupMock(mockRepo, tt.args)
-			}
-
-			got, err := uc.GetDevice(ctx, tt.args.id)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.EqualError(t, err, tt.wantErrMsg)
+				require.Nil(t, got)
 			} else {
-				assert.NoError(t, err)
-			}
+				require.NoError(t, err)
+				require.NotNil(t, got)
+				require.NotEqual(t, uuid.Nil, got.ID)
+				require.Equal(t, tt.wantOutput.HardwareID, got.HardwareID)
+				require.Equal(t, tt.wantOutput.Name, got.Name)
+				require.Equal(t, tt.wantOutput.Metadata, got.Metadata)
 
-			// ID以外はwantと一致し、CreatedAt/UpdatedAtは無視する
-			if tt.want.output != nil && got != nil {
-				tt.want.output.CreatedAt = got.CreatedAt
-				tt.want.output.UpdatedAt = got.UpdatedAt
+				// Check the state of the fake repository
+				savedDevice, findErr := fakeRepo.FindByID(ctx, got.ID)
+				require.NoError(t, findErr)
+				require.NotNil(t, savedDevice)
+				require.Equal(t, got.ID, savedDevice.ID)
 			}
-
-			assert.Equal(t, tt.want.output, got)
-			mockRepo.AssertExpectations(t)
 		})
 	}
 }
 
-// ListDevicesメソッドのテスト
-func TestListDevices(t *testing.T) {
+// TestGetDevice tests the GetDevice method.
+func TestGetDevice(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
-	type want struct {
-		output []*usecase.DeviceOutput
+	existingDevice := &entity.Device{
+		ID:         uuid.New(),
+		HardwareID: "hw-get-001",
+		Name:       "Test Device G",
+		Metadata:   map[string]any{"status": "active"},
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
 	}
-	type mockSetup func(repo *MockDeviceRepository)
-
-	// テストデータ
-	device1 := &entity.Device{ID: uuid.New(), HardwareID: "hw-list-001", Name: "リストデバイス 1", CreatedAt: time.Now(), UpdatedAt: time.Now()}
-	device2 := &entity.Device{ID: uuid.New(), HardwareID: "hw-list-002", Name: "リストデバイス 2", CreatedAt: time.Now(), UpdatedAt: time.Now()}
 
 	tests := []struct {
-		name       string
-		desc       string
-		setupMock  mockSetup
-		want       want
-		wantErr    bool
-		wantErrMsg string
+		name          string
+		desc          string
+		deviceID      uuid.UUID
+		repoSetup     func(*FakeDeviceRepository)
+		wantOutput    *usecase.DeviceOutput
+		wantErr       bool
+		wantErrString string
 	}{
 		{
-			name: "正常系: 全てのデバイスをリストする",
-			desc: "複数のデバイスが存在する場合に、それらが全て正常にリストアップされることを確認する",
-			setupMock: func(repo *MockDeviceRepository) {
-				repo.On("FindAll", ctx).Return([]*entity.Device{device1, device2}, nil).Once()
+			name:     "success: get an existing device",
+			desc:     "Verify that an existing device can be retrieved successfully by ID.",
+			deviceID: existingDevice.ID,
+			repoSetup: func(repo *FakeDeviceRepository) {
+				repo.devices[existingDevice.ID] = existingDevice
 			},
-			want: want{
-				output: []*usecase.DeviceOutput{
-					usecase.NewDeviceOutput(device1),
-					usecase.NewDeviceOutput(device2),
-				},
+			wantOutput: &usecase.DeviceOutput{
+				ID:         existingDevice.ID,
+				HardwareID: existingDevice.HardwareID,
+				Name:       existingDevice.Name,
+				Metadata:   existingDevice.Metadata,
+				CreatedAt:  existingDevice.CreatedAt,
+				UpdatedAt:  existingDevice.UpdatedAt,
 			},
-			wantErr: false,
+			wantErr:       false,
+			wantErrString: "",
 		},
 		{
-			name: "異常系: リポジトリがエラーを返す",
-			desc: "リポジトリのFindAllメソッドがエラーを返した場合、ユースケースもエラーを返すことを確認する",
-			setupMock: func(repo *MockDeviceRepository) {
-				repo.On("FindAll", ctx).Return(nil, errors.New("db find all error")).Once()
+			name:          "failure: device not found",
+			desc:          "Verify that a 'device not found' error is returned when searching for a non-existent ID.",
+			deviceID:      uuid.New(), // non-existing ID
+			repoSetup:     nil,
+			wantOutput:    nil,
+			wantErr:       true,
+			wantErrString: entity.ErrDeviceNotFound.Error(),
+		},
+		{
+			name:     "failure: repository returns a generic error",
+			desc:     "Verify that an unexpected error from the repository is propagated.",
+			deviceID: uuid.New(),
+			repoSetup: func(repo *FakeDeviceRepository) {
+				repo.FindErr = assert.AnError
 			},
-			want:       want{output: nil},
-			wantErr:    true,
-			wantErrMsg: "db find all error",
+			wantOutput:    nil,
+			wantErr:       true,
+			wantErrString: assert.AnError.Error(),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockRepo := new(MockDeviceRepository)
-			uc := usecase.NewDeviceUsecase(mockRepo)
+			t.Parallel()
 
-			if tt.setupMock != nil {
-				tt.setupMock(mockRepo)
+			fakeRepo := NewFakeDeviceRepository()
+			if tt.repoSetup != nil {
+				tt.repoSetup(fakeRepo)
 			}
+
+			uc := usecase.NewDeviceUsecase(fakeRepo)
+
+			got, err := uc.GetDevice(ctx, tt.deviceID)
+
+			if tt.wantErr {
+				require.Error(t, err)
+
+				if tt.wantErrString != "" {
+					require.Contains(t, err.Error(), tt.wantErrString)
+				}
+
+				require.Nil(t, got)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, got)
+				require.Equal(t, tt.wantOutput.ID, got.ID)
+				require.Equal(t, tt.wantOutput.HardwareID, got.HardwareID)
+				require.Equal(t, tt.wantOutput.Name, got.Name)
+				require.Equal(t, tt.wantOutput.Metadata, got.Metadata)
+			}
+		})
+	}
+}
+
+// ListDevicesメソッドのテスト.
+func TestListDevices(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
+	device1 := &entity.Device{
+		ID:         uuid.New(),
+		HardwareID: "hw-list-001",
+		Name:       "Device 1",
+		Metadata:   nil,
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
+	}
+	device2 := &entity.Device{
+		ID:         uuid.New(),
+		HardwareID: "hw-list-002",
+		Name:       "Device 2",
+		Metadata:   nil,
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
+	}
+
+	tests := []struct {
+		name          string
+		desc          string
+		repoSetup     func(*FakeDeviceRepository)
+		wantOutput    []*usecase.DeviceOutput
+		wantErr       bool
+		wantErrString string
+	}{
+		{
+			name: "success: list all devices",
+			desc: "Verify that all existing devices are listed correctly when multiple devices exist.",
+			repoSetup: func(repo *FakeDeviceRepository) {
+				repo.devices[device1.ID] = device1
+				repo.devices[device2.ID] = device2
+			},
+			wantOutput: []*usecase.DeviceOutput{
+				usecase.NewDeviceOutput(device1),
+				usecase.NewDeviceOutput(device2),
+			},
+			wantErr:       false,
+			wantErrString: "",
+		},
+		{
+			name: "success: no devices exist",
+			desc: "Verify that an empty list is returned when no devices exist.",
+			repoSetup: func(repo *FakeDeviceRepository) {
+				// No devices in repo
+			},
+			wantOutput:    []*usecase.DeviceOutput{},
+			wantErr:       false,
+			wantErrString: "",
+		},
+		{
+			name: "failure: repository returns an error",
+			desc: "Verify that the use case returns an error when the repository's FindAll method returns an error.",
+			repoSetup: func(repo *FakeDeviceRepository) {
+				repo.FindAllErr = assert.AnError
+			},
+			wantOutput:    nil,
+			wantErr:       true,
+			wantErrString: assert.AnError.Error(),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			fakeRepo := NewFakeDeviceRepository()
+			if tt.repoSetup != nil {
+				tt.repoSetup(fakeRepo)
+			}
+
+			uc := usecase.NewDeviceUsecase(fakeRepo)
 
 			got, err := uc.ListDevices(ctx)
 
 			if tt.wantErr {
-				assert.Error(t, err)
-				assert.EqualError(t, err, tt.wantErrMsg)
-			} else {
-				assert.NoError(t, err)
-			}
+				require.Error(t, err)
 
-			assert.Equal(t, tt.want.output, got)
-			mockRepo.AssertExpectations(t)
+				if tt.wantErrString != "" {
+					require.Contains(t, err.Error(), tt.wantErrString)
+				}
+
+				require.Nil(t, got)
+			} else {
+				require.NoError(t, err)
+				// Sort slices for consistent comparison
+				sort.Slice(got, func(i, j int) bool {
+					return got[i].ID.String() < got[j].ID.String()
+				})
+				sort.Slice(tt.wantOutput, func(i, j int) bool {
+					return tt.wantOutput[i].ID.String() < tt.wantOutput[j].ID.String()
+				})
+				require.Equal(t, tt.wantOutput, got)
+			}
 		})
 	}
 }
 
-// UpdateDeviceメソッドのテスト
+// UpdateDeviceメソッドのテスト.
 func TestUpdateDevice(t *testing.T) {
-	ctx := context.Background()
-	testID := uuid.New()
-	updatedName := "更新された名前"
+	t.Parallel()
 
-	type args struct {
-		input usecase.UpdateDeviceInput
+	ctx := context.Background()
+
+	existingDevice := &entity.Device{
+		ID:         uuid.New(),
+		HardwareID: "hw-update-001",
+		Name:       "Old Name",
+		Metadata:   map[string]any{"status": "inactive"},
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
 	}
-	type want struct {
-		output *usecase.DeviceOutput
-	}
-	type mockSetup func(repo *MockDeviceRepository, args args)
+	updatedName := "New Name"
+	updatedMetadata := map[string]any{"status": "active"}
 
 	tests := []struct {
-		name       string
-		desc       string
-		args       args
-		setupMock  mockSetup
-		want       want
-		wantErr    bool
-		wantErrMsg string
+		name          string
+		desc          string
+		input         usecase.UpdateDeviceInput
+		repoSetup     func(*FakeDeviceRepository)
+		wantOutput    *usecase.DeviceOutput
+		wantErr       bool
+		wantErrString string
 	}{
 		{
-			name: "正常系: デバイス名とメタデータを更新する",
-			desc: "既存のデバイスの名前とメタデータが正常に更新されることを確認する",
-			args: args{
-				input: usecase.UpdateDeviceInput{
-					ID:       testID,
-					Name:     &updatedName,
-					Metadata: map[string]any{"status": "active"},
-				},
+			name: "success: update device name and metadata",
+			desc: "Verify that the name and metadata of an existing device are updated correctly.",
+			input: usecase.UpdateDeviceInput{
+				ID:       existingDevice.ID,
+				Name:     &updatedName,
+				Metadata: updatedMetadata,
 			},
-			setupMock: func(repo *MockDeviceRepository, args args) {
-				existingDevice := &entity.Device{ID: args.input.ID, HardwareID: "hw-update-001"}
-				repo.On("FindByID", ctx, args.input.ID).Return(existingDevice, nil).Once()
-				repo.On("Save", ctx, mock.AnythingOfType("*entity.Device")).Return(nil).Once()
+			repoSetup: func(repo *FakeDeviceRepository) {
+				repo.devices[existingDevice.ID] = existingDevice
 			},
-			want: want{
-				output: &usecase.DeviceOutput{
-					ID:         testID,
-					HardwareID: "hw-update-001",
-					Name:       updatedName,
-					Metadata:   map[string]any{"status": "active"},
-				},
+			wantOutput: &usecase.DeviceOutput{
+				ID:         existingDevice.ID,
+				HardwareID: existingDevice.HardwareID,
+				Name:       updatedName,
+				Metadata:   updatedMetadata,
+				CreatedAt:  existingDevice.CreatedAt,
+				UpdatedAt:  existingDevice.UpdatedAt,
 			},
-			wantErr: false,
+			wantErr:       false,
+			wantErrString: "",
 		},
 		{
-			name: "異常系: 更新対象のデバイスが見つからない",
-			desc: "更新対象のデバイスIDが存在しない場合に'device not found'エラーが返されることを確認する",
-			args: args{input: usecase.UpdateDeviceInput{ID: uuid.New()}},
-			setupMock: func(repo *MockDeviceRepository, args args) {
-				repo.On("FindByID", ctx, args.input.ID).Return(nil, nil).Once()
+			name: "failure: target device not found",
+			desc: "Verify that a 'device not found' error is returned when the target device ID does not exist.",
+			input: usecase.UpdateDeviceInput{
+				ID:       uuid.New(), // non-existing ID
+				Name:     &updatedName,
+				Metadata: nil,
 			},
-			want:       want{output: nil},
-			wantErr:    true,
-			wantErrMsg: "device not found",
+			repoSetup:     nil,
+			wantOutput:    nil,
+			wantErr:       true,
+			wantErrString: entity.ErrDeviceNotFound.Error(),
+		},
+		{
+			name: "failure: repository returns error on FindByID",
+			desc: "Verify that an error from FindByID is propagated.",
+			input: usecase.UpdateDeviceInput{
+				ID:       existingDevice.ID,
+				Name:     &updatedName,
+				Metadata: nil,
+			},
+			repoSetup: func(repo *FakeDeviceRepository) {
+				repo.FindErr = assert.AnError
+			},
+			wantOutput:    nil,
+			wantErr:       true,
+			wantErrString: assert.AnError.Error(),
+		},
+		{
+			name: "failure: repository returns error on Save",
+			desc: "Verify that an error from Save is propagated.",
+			input: usecase.UpdateDeviceInput{
+				ID:       existingDevice.ID,
+				Name:     &updatedName,
+				Metadata: nil,
+			},
+			repoSetup: func(repo *FakeDeviceRepository) {
+				repo.devices[existingDevice.ID] = existingDevice
+				repo.SaveErr = assert.AnError
+			},
+			wantOutput:    nil,
+			wantErr:       true,
+			wantErrString: assert.AnError.Error(),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockRepo := new(MockDeviceRepository)
-			uc := usecase.NewDeviceUsecase(mockRepo)
+			t.Parallel()
 
-			if tt.setupMock != nil {
-				tt.setupMock(mockRepo, tt.args)
+			fakeRepo := NewFakeDeviceRepository()
+			if tt.repoSetup != nil {
+				tt.repoSetup(fakeRepo)
 			}
 
-			got, err := uc.UpdateDevice(ctx, tt.args.input)
+			uc := usecase.NewDeviceUsecase(fakeRepo)
+
+			got, err := uc.UpdateDevice(ctx, tt.input)
 
 			if tt.wantErr {
-				assert.Error(t, err)
-				assert.EqualError(t, err, tt.wantErrMsg)
+				require.Error(t, err)
+
+				if tt.wantErrString != "" {
+					require.Contains(t, err.Error(), tt.wantErrString)
+				}
+
+				require.Nil(t, got)
 			} else {
-				assert.NoError(t, err)
-			}
+				require.NoError(t, err)
+				require.NotNil(t, got)
+				require.Equal(t, tt.wantOutput.ID, got.ID)
+				require.Equal(t, tt.wantOutput.HardwareID, got.HardwareID)
+				require.Equal(t, tt.wantOutput.Name, got.Name)
+				require.Equal(t, tt.wantOutput.Metadata, got.Metadata)
 
-			if tt.want.output != nil && got != nil {
-				tt.want.output.CreatedAt = got.CreatedAt
-				tt.want.output.UpdatedAt = got.UpdatedAt
+				// Check the state of the fake repository
+				savedDevice, findErr := fakeRepo.FindByID(ctx, got.ID)
+				require.NoError(t, findErr)
+				require.NotNil(t, savedDevice)
+				require.Equal(t, updatedName, savedDevice.Name)
+				require.Equal(t, entity.JSONBMap(updatedMetadata), savedDevice.Metadata)
 			}
-
-			assert.Equal(t, tt.want.output, got)
-			mockRepo.AssertExpectations(t)
 		})
 	}
 }
 
-// DeleteDeviceメソッドのテスト
+// DeleteDeviceメソッドのテスト.
 func TestDeleteDevice(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
-	testID := uuid.New()
-
-	type args struct {
-		id uuid.UUID
+	existingDevice := &entity.Device{
+		ID:         uuid.New(),
+		HardwareID: "hw-delete-001",
+		Name:       "Test Device D",
+		Metadata:   nil,
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
 	}
-	type mockSetup func(repo *MockDeviceRepository, args args)
 
 	tests := []struct {
-		name       string
-		desc       string
-		args       args
-		setupMock  mockSetup
-		wantErr    bool
-		wantErrMsg string
+		name          string
+		desc          string
+		deviceID      uuid.UUID
+		repoSetup     func(*FakeDeviceRepository)
+		wantErr       bool
+		wantErrString string
 	}{
 		{
-			name: "正常系: デバイスを削除する",
-			desc: "存在するデバイスIDを指定して、デバイスが正常に削除されることを確認する",
-			args: args{id: testID}, // testID を使用
-			setupMock: func(repo *MockDeviceRepository, args args) {
-				// FindByIDが成功してデバイスを返すようにモック
-				repo.On("FindByID", ctx, args.id).Return(&entity.Device{ID: args.id}, nil).Once()
-				// Deleteが成功するようにモック
-				repo.On("Delete", ctx, args.id).Return(nil).Once()
+			name:     "success: delete a device",
+			desc:     "Verify that a device is successfully deleted when a valid device ID is provided.",
+			deviceID: existingDevice.ID,
+			repoSetup: func(repo *FakeDeviceRepository) {
+				repo.devices[existingDevice.ID] = existingDevice
 			},
-			wantErr: false,
+			wantErr:       false,
+			wantErrString: "",
 		},
 		{
-			name: "異常系: 削除対象のデバイスが見つからない",
-			desc: "デバイスが見つからなかった場合に'device not found'エラーが返されることを確認する",
-			args: args{id: uuid.New()}, // 新しいユニークなIDを使用
-			setupMock: func(repo *MockDeviceRepository, args args) {
-				// FindByIDがnilとnilエラーを返すようにモック (デバイスが見つからない場合)
-				repo.On("FindByID", ctx, args.id).Return(nil, nil).Once()
-			},
-			wantErr:    true,
-			wantErrMsg: "device not found",
+			name:          "failure: target device not found",
+			desc:          "Verify that an error is returned when the target device to delete is not found.",
+			deviceID:      uuid.New(), // non-existing ID
+			repoSetup:     nil,
+			wantErr:       true,
+			wantErrString: entity.ErrDeviceNotFound.Error(),
 		},
 		{
-			name: "異常系: FindByIDがエラーを返す",
-			desc: "FindByIDメソッドがエラーを返した場合、ユースケースもそのエラーを返すことを確認する",
-			args: args{id: uuid.New()}, // 新しいユニークなIDを使用
-			setupMock: func(repo *MockDeviceRepository, args args) {
-				// FindByIDがエラーを返すようにモック
-				repo.On("FindByID", ctx, args.id).Return(nil, errors.New("FindByID db error")).Once()
+			name:     "failure: repository returns error on FindByID",
+			desc:     "Verify that an error from FindByID is propagated.",
+			deviceID: existingDevice.ID,
+			repoSetup: func(repo *FakeDeviceRepository) {
+				repo.devices[existingDevice.ID] = existingDevice
+				repo.FindErr = assert.AnError
 			},
-			wantErr:    true,
-			wantErrMsg: "FindByID db error",
+			wantErr:       true,
+			wantErrString: assert.AnError.Error(),
 		},
 		{
-			name: "異常系: Deleteがエラーを返す",
-			desc: "リポジトリのDeleteメソッドがエラーを返した場合、ユースケースもエラーを返すことを確認する",
-			args: args{id: testID},
-			setupMock: func(repo *MockDeviceRepository, args args) {
-				// FindByIDが成功してデバイスを返すようにモック
-				repo.On("FindByID", ctx, args.id).Return(&entity.Device{ID: args.id}, nil).Once()
-				// Deleteがエラーを返すようにモック
-				repo.On("Delete", ctx, args.id).Return(errors.New("db delete error")).Once()
+			name:     "failure: repository returns error on Delete",
+			desc:     "Verify that an error from Delete is propagated.",
+			deviceID: existingDevice.ID,
+			repoSetup: func(repo *FakeDeviceRepository) {
+				repo.devices[existingDevice.ID] = existingDevice
+				repo.DeleteErr = assert.AnError
 			},
-			wantErr:    true,
-			wantErrMsg: "db delete error",
+			wantErr:       true,
+			wantErrString: assert.AnError.Error(),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockRepo := new(MockDeviceRepository)
-			uc := usecase.NewDeviceUsecase(mockRepo)
+			t.Parallel()
 
-			if tt.setupMock != nil {
-				tt.setupMock(mockRepo, tt.args)
+			fakeRepo := NewFakeDeviceRepository()
+			if tt.repoSetup != nil {
+				tt.repoSetup(fakeRepo)
 			}
 
-			err := uc.DeleteDevice(ctx, tt.args.id)
+			uc := usecase.NewDeviceUsecase(fakeRepo)
+
+			err := uc.DeleteDevice(ctx, tt.deviceID)
 
 			if tt.wantErr {
-				assert.Error(t, err)
-				assert.EqualError(t, err, tt.wantErrMsg)
-			} else {
-				assert.NoError(t, err)
-			}
+				require.Error(t, err)
 
-			mockRepo.AssertExpectations(t)
+				if tt.wantErrString != "" {
+					require.Contains(t, err.Error(), tt.wantErrString)
+				}
+			} else {
+				require.NoError(t, err)
+				// Check the state of the fake repository
+				_, findErr := fakeRepo.FindByID(ctx, tt.deviceID)
+				require.ErrorIs(t, findErr, entity.ErrDeviceNotFound)
+			}
 		})
 	}
 }

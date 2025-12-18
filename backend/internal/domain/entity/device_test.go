@@ -1,29 +1,73 @@
-package entity
+package entity_test
 
 import (
 	"reflect"
 	"testing"
 
+	"backend/internal/domain/entity"
+
 	"github.com/google/uuid"
 )
 
-// TestNewDeviceはNewDeviceコンストラクタ関数の様々な挙動をテストする
+// want構造体は期待されるDeviceの状態を定義する.
+type want struct {
+	hardwareID string
+	name       string
+	metadata   entity.JSONBMap
+	id         uuid.UUID
+}
+
+// TestNewDeviceはNewDeviceコンストラクタ関数の様々な挙動をテストする.
 func TestNewDevice(t *testing.T) {
-	// args構造体はNewDevice関数に渡す引数をまとめる
-	type args struct {
-		hardwareID string
-		name       *string
-		metadata   map[string]any
-	}
+	t.Parallel()
 
-	// want構造体は期待されるDeviceの状態を定義する
-	type want struct {
-		hardwareID string
-		name       string
-		metadata   JSONBMap
-		id         uuid.UUID
-	}
+	tests := getNewDeviceTestCases()
 
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := entity.NewDevice(tt.args.hardwareID, tt.args.name, tt.args.metadata)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("NewDevice() expected error, but got nil")
+				}
+
+				if err.Error() != tt.wantErrMsg {
+					t.Errorf("NewDevice() error msg = %q, wantErrMsg %q", err.Error(), tt.wantErrMsg)
+				}
+
+				if got != nil {
+					t.Errorf("NewDevice() got = %v, want nil for error case", got)
+				}
+
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("NewDevice() unexpected error: %v", err)
+			}
+
+			assertDevice(t, tt.want, got)
+		})
+	}
+}
+
+type newDeviceTestArgs struct {
+	hardwareID string
+	name       *string
+	metadata   map[string]any
+}
+
+func getNewDeviceTestCases() []struct {
+	name       string // テストケース名
+	desc       string // 詳細な意図や観点
+	args       newDeviceTestArgs
+	want       want
+	wantErr    bool
+	wantErrMsg string // 期待されるエラーメッセージ
+} {
 	// テストケースで使用する変数を事前に定義
 	nameStr := "test-device-1"
 	nameStrComplex := "env-sensor-1"
@@ -52,18 +96,18 @@ func TestNewDevice(t *testing.T) {
 		},
 	}
 
-	tests := []struct {
+	return []struct {
 		name       string // テストケース名
 		desc       string // 詳細な意図や観点
-		args       args
+		args       newDeviceTestArgs
 		want       want
 		wantErr    bool
 		wantErrMsg string // 期待されるエラーメッセージ
 	}{
 		{
 			name: "success: with name and metadata",
-			desc: "全ての必須およびオプション引数が適切に提供された場合の正常系テスト",
-			args: args{
+			desc: "Successful test case when all mandatory and optional arguments are provided correctly.",
+			args: newDeviceTestArgs{
 				hardwareID: "test-hw-id-1",
 				name:       &nameStr,
 				metadata:   map[string]any{"key": "value"},
@@ -71,15 +115,16 @@ func TestNewDevice(t *testing.T) {
 			want: want{
 				hardwareID: "test-hw-id-1",
 				name:       "test-device-1",
-				metadata:   JSONBMap{"key": "value"},
+				metadata:   entity.JSONBMap{"key": "value"},
 				id:         uuid.Nil,
 			},
-			wantErr: false,
+			wantErr:    false,
+			wantErrMsg: "",
 		},
 		{
 			name: "success: with nil name and nil metadata",
-			desc: "オプション引数がnilで提供された場合の正常系テスト",
-			args: args{
+			desc: "Successful test case when optional arguments are provided as nil.",
+			args: newDeviceTestArgs{
 				hardwareID: "test-hw-id-2",
 				name:       nil,
 				metadata:   nil,
@@ -87,15 +132,16 @@ func TestNewDevice(t *testing.T) {
 			want: want{
 				hardwareID: "test-hw-id-2",
 				name:       "",
-				metadata:   JSONBMap{},
+				metadata:   entity.JSONBMap{},
 				id:         uuid.Nil,
 			},
-			wantErr: false,
+			wantErr:    false,
+			wantErrMsg: "",
 		},
 		{
 			name: "success: with complex metadata",
-			desc: "複雑なメタデータが提供された場合の正常系テスト",
-			args: args{
+			desc: "Successful test case when complex metadata is provided.",
+			args: newDeviceTestArgs{
 				hardwareID: "test-hw-id-3",
 				name:       &nameStrComplex,
 				metadata:   complexMetadata,
@@ -103,62 +149,47 @@ func TestNewDevice(t *testing.T) {
 			want: want{
 				hardwareID: "test-hw-id-3",
 				name:       "env-sensor-1",
-				metadata:   JSONBMap(complexMetadata),
+				metadata:   entity.JSONBMap(complexMetadata),
 				id:         uuid.Nil,
 			},
-			wantErr: false,
+			wantErr:    false,
+			wantErrMsg: "",
 		},
 		{
 			name: "failure: empty hardware_id",
-			desc: "必須のhardwareIDが空文字列の場合の異常系テスト",
-			args: args{
+			desc: "Failure test case when mandatory hardwareID is an empty string.",
+			args: newDeviceTestArgs{
 				hardwareID: "",
 				name:       &nameStrEmptyID,
 				metadata:   nil,
 			},
-			want:       want{}, // エラーケースなのでwantは重要ではない
+			want:       want{hardwareID: "", name: "", metadata: nil, id: uuid.Nil}, // want is not important for error cases
 			wantErr:    true,
 			wantErrMsg: "hardware id cannot be empty",
 		},
 	}
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Act
-			got, err := NewDevice(tt.args.hardwareID, tt.args.name, tt.args.metadata)
+func assertDevice(t *testing.T, want want, got *entity.Device) {
+	t.Helper()
 
-			// Assert - Error
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("NewDevice() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if tt.wantErr {
-				if err.Error() != tt.wantErrMsg {
-					t.Errorf("NewDevice() error msg = %q, wantErrMsg %q", err.Error(), tt.wantErrMsg)
-				}
-				if got != nil {
-					t.Errorf("NewDevice() got = %v, want nil for error case", got)
-				}
-				return // エラーケースのテストはここで終了
-			}
+	if got == nil {
+		t.Fatal("NewDevice() returned a nil device for a success case")
+	}
 
-			// Assert - Success (got is not nil)
-			if got == nil {
-				t.Fatal("NewDevice() returned a nil device for a success case")
-			}
+	if got.HardwareID != want.hardwareID {
+		t.Errorf("NewDevice() HardwareID = %v, want %v", got.HardwareID, want.hardwareID)
+	}
 
-			// Assert - Success (Fields)
-			if got.HardwareID != tt.want.hardwareID {
-				t.Errorf("NewDevice() HardwareID = %v, want %v", got.HardwareID, tt.want.hardwareID)
-			}
-			if got.Name != tt.want.name {
-				t.Errorf("NewDevice() Name = %v, want %v", got.Name, tt.want.name)
-			}
-			if !reflect.DeepEqual(got.Metadata, tt.want.metadata) {
-				t.Errorf("NewDevice() Metadata = %v, want %v", got.Metadata, tt.want.metadata)
-			}
-			if got.ID != tt.want.id {
-				t.Errorf("NewDevice() ID = %v, want %v", got.ID, tt.want.id)
-			}
-		})
+	if got.Name != want.name {
+		t.Errorf("NewDevice() Name = %v, want %v", got.Name, want.name)
+	}
+
+	if !reflect.DeepEqual(got.Metadata, want.metadata) {
+		t.Errorf("NewDevice() Metadata = %v, want %v", got.Metadata, want.metadata)
+	}
+
+	if got.ID != want.id {
+		t.Errorf("NewDevice() ID = %v, want %v", got.ID, want.id)
 	}
 }

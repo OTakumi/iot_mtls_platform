@@ -1,13 +1,16 @@
-package datetime
+package datetime_test
 
 import (
 	"testing"
 	"time"
+
+	"backend/internal/domain/VO/datetime"
 )
 
 func TestNow(t *testing.T) {
+	t.Parallel()
 	// Call the Now() function
-	dt := Now()
+	dt := datetime.Now()
 
 	// Get the current time for comparison
 	now := time.Now()

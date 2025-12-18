@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 func main() {
@@ -19,10 +19,12 @@ func main() {
 	// 環境変数からDB接続情報を取得
 	dsnAuth := os.Getenv("DSN_AUTH")
 	if dsnAuth == "" {
-		log.Fatal("環境変数 DSN_AUTH が設定されていません")
+		log.Fatal("environment variable DSN_AUTH is not set")
 	}
 
-	db, err := gorm.Open(postgres.Open(dsnAuth), &gorm.Config{})
+	db, err := gorm.Open(postgres.Open(dsnAuth), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
 	if err != nil {
 		log.Fatalf("failed to connect database: %v", err)
 	}
@@ -46,8 +48,9 @@ func main() {
 	}
 
 	// --- サーバーの起動 ---
-	fmt.Println("Server starting on port 8080...")
-	if err := router.Run(":8080"); err != nil {
+	log.Println("Server starting on port 8080...")
+
+	if err := router.Run(":8080"); err != nil { //nolint:noinlineerr
 		log.Fatalf("failed to start server: %v", err)
 	}
 }

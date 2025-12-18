@@ -1,13 +1,14 @@
+// Package entity defines the domain entities.
 package entity
 
 import (
-	"errors"
+	"maps"
 	"time"
 
 	"github.com/google/uuid"
 )
 
-// デバイス情報はHardware_IDを必須とし、Name, MetadataはOptionとする
+// Device represents a device entity, with HardwareID being mandatory and Name and Metadata being optional.
 type Device struct {
 	ID uuid.UUID `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
 
@@ -29,19 +30,22 @@ type Device struct {
 	UpdatedAt time.Time
 }
 
-func NewDevice(hardwareId string, name *string, metadata map[string]any) (*Device, error) {
-	if hardwareId == "" {
-		return nil, errors.New("hardware id cannot be empty")
+// NewDevice creates a new Device.
+func NewDevice(hardwareID string, name *string, metadata map[string]any) (*Device, error) {
+	if hardwareID == "" {
+		return nil, ErrHardwareIDEmpty
 	}
 
 	newMetadata := make(JSONBMap)
-	for k, v := range metadata {
-		newMetadata[k] = v
-	}
+	maps.Copy(newMetadata, metadata)
 
 	newDevice := &Device{
-		HardwareID: hardwareId,
+		ID:         uuid.Nil,
+		HardwareID: hardwareID,
+		Name:       "", // Default to empty string, to be overwritten if name is provided
 		Metadata:   newMetadata,
+		CreatedAt:  time.Time{},
+		UpdatedAt:  time.Time{},
 	}
 
 	if name != nil {
