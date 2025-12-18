@@ -66,10 +66,6 @@ func (uc *deviceUsecase) GetDevice(ctx context.Context, id uuid.UUID) (*DeviceOu
 		return nil, fmt.Errorf("%w: %w", ErrDBFindByID, err)
 	}
 
-	if device == nil {
-		return nil, entity.ErrDeviceNotFound
-	}
-
 	return NewDeviceOutput(device), nil
 }
 
@@ -95,10 +91,6 @@ func (uc *deviceUsecase) UpdateDevice(ctx context.Context, input UpdateDeviceInp
 	device, err := uc.deviceRepo.FindByID(ctx, input.ID)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrDBFindByID, err)
-	}
-
-	if device == nil {
-		return nil, entity.ErrDeviceNotFound
 	}
 
 	// エンティティの値を更新
