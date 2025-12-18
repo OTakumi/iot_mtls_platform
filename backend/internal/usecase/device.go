@@ -30,8 +30,6 @@ type deviceUsecase struct {
 }
 
 // NewDeviceUsecase deviceUsecaseの新しいインスタンスを生成.
-//
-//nolint:ireturn
 func NewDeviceUsecase(repo repository.DeviceRepository) DeviceUsecase {
 	return &deviceUsecase{deviceRepo: repo}
 }
