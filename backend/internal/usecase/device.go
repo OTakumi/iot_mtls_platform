@@ -2,7 +2,9 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"gorm.io/gorm"
 
 	"github.com/google/uuid"
 
@@ -63,6 +65,10 @@ func (uc *deviceUsecase) CreateDevice(ctx context.Context, input CreateDeviceInp
 func (uc *deviceUsecase) GetDevice(ctx context.Context, id uuid.UUID) (*DeviceOutput, error) {
 	device, err := uc.deviceRepo.FindByID(ctx, id)
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, entity.ErrDeviceNotFound
+		}
+
 		return nil, fmt.Errorf("%w: %w", ErrDBFindByID, err)
 	}
 
@@ -90,6 +96,10 @@ func (uc *deviceUsecase) UpdateDevice(ctx context.Context, input UpdateDeviceInp
 	// 更新対象のDeviceを検索
 	device, err := uc.deviceRepo.FindByID(ctx, input.ID)
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, entity.ErrDeviceNotFound
+		}
+
 		return nil, fmt.Errorf("%w: %w", ErrDBFindByID, err)
 	}
 
