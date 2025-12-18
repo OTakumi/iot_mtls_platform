@@ -3,6 +3,7 @@ package handler
 
 import (
 	"errors"
+	"log"
 	"net/http"
 
 	"backend/internal/domain/entity"
@@ -10,7 +11,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
 // DeviceHandler HTTPリクエストを処理し、DeviceUsecaseを呼び出す.
@@ -36,7 +36,8 @@ func (h *DeviceHandler) CreateDevice(c *gin.Context) {
 
 	output, err := h.uc.CreateDevice(c.Request.Context(), input)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("failed to create device: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error"})
 
 		return
 	}
@@ -55,13 +56,14 @@ func (h *DeviceHandler) GetDevice(c *gin.Context) {
 
 	output, err := h.uc.GetDevice(c.Request.Context(), id)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) || errors.Is(err, entity.ErrDeviceNotFound) {
+		if errors.Is(err, usecase.ErrDBFindByID) || errors.Is(err, entity.ErrDeviceNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": entity.ErrDeviceNotFound.Error()})
 
 			return
 		}
 
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("failed to get device: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error"})
 
 		return
 	}
@@ -73,7 +75,8 @@ func (h *DeviceHandler) GetDevice(c *gin.Context) {
 func (h *DeviceHandler) ListDevices(c *gin.Context) {
 	outputs, err := h.uc.ListDevices(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("failed to list devices: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error"})
 
 		return
 	}
@@ -108,13 +111,14 @@ func (h *DeviceHandler) UpdateDevice(c *gin.Context) {
 
 	output, err := h.uc.UpdateDevice(c.Request.Context(), input)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) || errors.Is(err, entity.ErrDeviceNotFound) {
+		if errors.Is(err, usecase.ErrDBFindByID) || errors.Is(err, entity.ErrDeviceNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": entity.ErrDeviceNotFound.Error()})
 
 			return
 		}
 
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("failed to update device: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error"})
 
 		return
 	}
@@ -133,13 +137,14 @@ func (h *DeviceHandler) DeleteDevice(c *gin.Context) {
 
 	err = h.uc.DeleteDevice(c.Request.Context(), id)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) || errors.Is(err, entity.ErrDeviceNotFound) {
+		if errors.Is(err, usecase.ErrDBDelete) || errors.Is(err, entity.ErrDeviceNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": entity.ErrDeviceNotFound.Error()})
 
 			return
 		}
 
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("failed to delete device: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error"})
 
 		return
 	}
