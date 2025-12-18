@@ -15,7 +15,6 @@ import (
 
 // GORMリポジトリのCRUD操作を実際のDBで検証する結合テスト.
 func TestDeviceGormRepository_Integration(t *testing.T) {
-	t.Parallel()
 	// testDBは main_test.go で初期化される
 	if testDB == nil {
 		t.Fatal("testDB is not initialized")
@@ -26,7 +25,6 @@ func TestDeviceGormRepository_Integration(t *testing.T) {
 
 	// Save (Create)
 	t.Run("Save(Create) - Creates a new device", func(t *testing.T) {
-		t.Parallel()
 		cleanupTable(t)
 
 		// テストデータ作成
@@ -52,7 +50,6 @@ func TestDeviceGormRepository_Integration(t *testing.T) {
 
 	// FindByID
 	t.Run("FindByID - Finds an existing device by ID", func(t *testing.T) {
-		t.Parallel()
 		cleanupTable(t)
 
 		// テストデータ作成 & 保存
@@ -73,7 +70,6 @@ func TestDeviceGormRepository_Integration(t *testing.T) {
 	})
 
 	t.Run("FindByID - Returns error for non-existent ID", func(t *testing.T) {
-		t.Parallel()
 		cleanupTable(t)
 
 		// 実行
@@ -88,7 +84,6 @@ func TestDeviceGormRepository_Integration(t *testing.T) {
 
 	// Save (Update)
 	t.Run("Save(Update) - Updates an existing device", func(t *testing.T) {
-		t.Parallel()
 		cleanupTable(t)
 
 		// テストデータ作成 & 保存
@@ -119,7 +114,6 @@ func TestDeviceGormRepository_Integration(t *testing.T) {
 
 	// Delete
 	t.Run("Delete - Deletes an existing device", func(t *testing.T) {
-		t.Parallel()
 		cleanupTable(t)
 
 		// テストデータ作成 & 保存
