@@ -7,6 +7,6 @@ var (
 	ErrRepositorySave = errors.New("repository save error")
 	// ErrDBFindAll is returned when there is an error finding all records in the database.
 	ErrDBFindAll  = errors.New("db find all error")
-	ErrFindByIDDB = errors.New("FindByID db error")
+	ErrDBFindByID = errors.New("db find by id error")
 	ErrDBDelete   = errors.New("db delete error")
 )

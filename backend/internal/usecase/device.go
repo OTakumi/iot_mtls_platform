@@ -63,7 +63,7 @@ func (uc *deviceUsecase) CreateDevice(ctx context.Context, input CreateDeviceInp
 func (uc *deviceUsecase) GetDevice(ctx context.Context, id uuid.UUID) (*DeviceOutput, error) {
 	device, err := uc.deviceRepo.FindByID(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrFindByIDDB, err)
+		return nil, fmt.Errorf("%w: %w", ErrDBFindByID, err)
 	}
 
 	if device == nil {
@@ -94,7 +94,7 @@ func (uc *deviceUsecase) UpdateDevice(ctx context.Context, input UpdateDeviceInp
 	// 更新対象のDeviceを検索
 	device, err := uc.deviceRepo.FindByID(ctx, input.ID)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrFindByIDDB, err)
+		return nil, fmt.Errorf("%w: %w", ErrDBFindByID, err)
 	}
 
 	if device == nil {
@@ -127,7 +127,7 @@ func (uc *deviceUsecase) DeleteDevice(ctx context.Context, id uuid.UUID) error {
 	// 削除対象の存在チェック
 	device, err := uc.deviceRepo.FindByID(ctx, id)
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrFindByIDDB, err)
+		return fmt.Errorf("%w: %w", ErrDBFindByID, err)
 	}
 
 	if device == nil {
