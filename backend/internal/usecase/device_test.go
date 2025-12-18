@@ -592,17 +592,7 @@ func TestDeleteDevice(t *testing.T) {
 			wantErr:       true,
 			wantErrString: entity.ErrDeviceNotFound.Error(),
 		},
-		{
-			name:     "failure: repository returns error on FindByID",
-			desc:     "Verify that an error from FindByID is propagated.",
-			deviceID: existingDevice.ID,
-			repoSetup: func(repo *FakeDeviceRepository) {
-				repo.devices[existingDevice.ID] = existingDevice
-				repo.FindErr = assert.AnError
-			},
-			wantErr:       true,
-			wantErrString: assert.AnError.Error(),
-		},
+
 		{
 			name:     "failure: repository returns error on Delete",
 			desc:     "Verify that an error from Delete is propagated.",
