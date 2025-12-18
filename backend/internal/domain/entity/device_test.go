@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// want構造体は期待されるDeviceの状態を定義する.
+// want defines the expected state of a Device.
 type want struct {
 	hardwareID string
 	name       string
@@ -17,7 +17,7 @@ type want struct {
 	id         uuid.UUID
 }
 
-// TestNewDeviceはNewDeviceコンストラクタ関数の様々な挙動をテストする.
+// TestNewDevice tests the NewDevice constructor function.
 func TestNewDevice(t *testing.T) {
 	t.Parallel()
 
@@ -61,19 +61,19 @@ type newDeviceTestArgs struct {
 }
 
 func getNewDeviceTestCases() []struct {
-	name       string // テストケース名
-	desc       string // 詳細な意図や観点
+	name       string // name of the test case
+	desc       string // description of the test case's intent
 	args       newDeviceTestArgs
 	want       want
 	wantErr    bool
-	wantErrMsg string // 期待されるエラーメッセージ
+	wantErrMsg string // expected error message if wantErr is true
 } {
-	// テストケースで使用する変数を事前に定義
+	// Pre-defined variables for use in test cases
 	nameStr := "test-device-1"
 	nameStrComplex := "env-sensor-1"
 	nameStrEmptyID := "some-name"
 
-	// 複雑なメタデータの定義
+	// Definition of complex metadata for testing
 	complexMetadata := map[string]any{
 		"type": "env_sensor",
 		"hardware": map[string]any{
@@ -83,7 +83,7 @@ func getNewDeviceTestCases() []struct {
 		},
 		"location": map[string]any{
 			"building": "Factory-A",
-			"floor":    float64(2), // JSONの数値はGoではfloat64としてパースされる
+			"floor":    float64(2), // JSON numbers are parsed as float64 in Go
 			"zone":     "shipping_area",
 		},
 		"firmware": map[string]any{
@@ -97,12 +97,12 @@ func getNewDeviceTestCases() []struct {
 	}
 
 	return []struct {
-		name       string // テストケース名
-		desc       string // 詳細な意図や観点
+		name       string // name of the test case
+		desc       string // description of the test case's intent
 		args       newDeviceTestArgs
 		want       want
 		wantErr    bool
-		wantErrMsg string // 期待されるエラーメッセージ
+		wantErrMsg string // expected error message if wantErr is true
 	}{
 		{
 			name: "success: with name and metadata",
@@ -163,7 +163,12 @@ func getNewDeviceTestCases() []struct {
 				name:       &nameStrEmptyID,
 				metadata:   nil,
 			},
-			want:       want{hardwareID: "", name: "", metadata: nil, id: uuid.Nil}, // want is not important for error cases
+			want: want{ // The 'want' struct is not checked in error cases
+				hardwareID: "",
+				name:       "",
+				metadata:   nil,
+				id:         uuid.Nil,
+			},
 			wantErr:    true,
 			wantErrMsg: "hardware id cannot be empty",
 		},

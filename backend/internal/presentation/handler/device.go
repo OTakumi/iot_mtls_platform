@@ -13,17 +13,17 @@ import (
 	"github.com/google/uuid"
 )
 
-// DeviceHandler HTTPリクエストを処理し、DeviceUsecaseを呼び出す.
+// DeviceHandler handles HTTP requests and calls the DeviceUsecase.
 type DeviceHandler struct {
 	uc usecase.DeviceUsecase
 }
 
-// NewDeviceHandler DeviceHandlerの新しいインスタンスを生成.
+// NewDeviceHandler creates a new instance of DeviceHandler.
 func NewDeviceHandler(uc usecase.DeviceUsecase) *DeviceHandler {
 	return &DeviceHandler{uc: uc}
 }
 
-// CreateDevice POST /devices - 新しいデバイスを作成.
+// CreateDevice handles POST /devices to create a new device.
 func (h *DeviceHandler) CreateDevice(c *gin.Context) {
 	var input usecase.CreateDeviceInput
 
@@ -45,7 +45,7 @@ func (h *DeviceHandler) CreateDevice(c *gin.Context) {
 	c.JSON(http.StatusCreated, output)
 }
 
-// GetDevice GET /devices/:id - 特定のデバイスを取得.
+// GetDevice handles GET /devices/:id to retrieve a specific device.
 func (h *DeviceHandler) GetDevice(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -71,7 +71,7 @@ func (h *DeviceHandler) GetDevice(c *gin.Context) {
 	c.JSON(http.StatusOK, output)
 }
 
-// ListDevices GET /devices - 全てのデバイスを取得.
+// ListDevices handles GET /devices to retrieve all devices.
 func (h *DeviceHandler) ListDevices(c *gin.Context) {
 	outputs, err := h.uc.ListDevices(c.Request.Context())
 	if err != nil {
@@ -81,7 +81,7 @@ func (h *DeviceHandler) ListDevices(c *gin.Context) {
 		return
 	}
 
-	// 空のスライスの場合でも nil ではなく [] を返すようにする
+	// Ensure the response is an empty array `[]` instead of `null` if the slice is empty.
 	if outputs == nil {
 		outputs = []*usecase.DeviceOutput{}
 	}
@@ -89,7 +89,7 @@ func (h *DeviceHandler) ListDevices(c *gin.Context) {
 	c.JSON(http.StatusOK, outputs)
 }
 
-// UpdateDevice PUT /devices/:id - 特定のデバイスを更新.
+// UpdateDevice handles PUT /devices/:id to update a specific device.
 func (h *DeviceHandler) UpdateDevice(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -107,7 +107,7 @@ func (h *DeviceHandler) UpdateDevice(c *gin.Context) {
 		return
 	}
 
-	input.ID = id // URLから取得したIDをインプットに設定
+	input.ID = id // Set the ID from the URL into the input struct.
 
 	output, err := h.uc.UpdateDevice(c.Request.Context(), input)
 	if err != nil {
@@ -126,7 +126,7 @@ func (h *DeviceHandler) UpdateDevice(c *gin.Context) {
 	c.JSON(http.StatusOK, output)
 }
 
-// DeleteDevice DELETE /devices/:id - 特定のデバイスを削除.
+// DeleteDevice handles DELETE /devices/:id to delete a specific device.
 func (h *DeviceHandler) DeleteDevice(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {

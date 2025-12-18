@@ -29,7 +29,7 @@ const (
 )
 
 func main() {
-	// --- データベース接続の初期化 ---
+	// --- Initialize database connection ---
 	dsnAuth := os.Getenv("DSN_AUTH")
 	if dsnAuth == "" {
 		log.Fatal("environment variable DSN_AUTH is not set")
@@ -42,7 +42,7 @@ func main() {
 		log.Fatalf("failed to connect database: %v", err)
 	}
 
-	// --- データベース接続プールの設定 ---
+	// --- Configure database connection pool ---
 	sqlDB, err := db.DB()
 	if err != nil {
 		log.Fatalf("failed to get underlying sql.DB: %v", err)
@@ -52,15 +52,15 @@ func main() {
 	sqlDB.SetMaxOpenConns(dbMaxOpenConns)
 	sqlDB.SetConnMaxLifetime(time.Hour)
 
-	// --- 依存関係の注入 (Dependency Injection) ---
+	// --- Dependency Injection ---
 	deviceRepo := persistence.NewDeviceGormRepository(db)
 	deviceUsecase := usecase.NewDeviceUsecase(deviceRepo)
 	deviceHandler := handler.NewDeviceHandler(deviceUsecase)
 
-	// --- Ginルーターのセットアップ ---
+	// --- Gin router setup ---
 	router := gin.Default()
 
-	// ヘルスチェック用エンドポイント
+	// Health check endpoint
 	router.GET("/health", func(c *gin.Context) {
 		err := sqlDB.PingContext(c.Request.Context())
 		if err != nil {
@@ -72,7 +72,7 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"status": "healthy"})
 	})
 
-	// デバイス関連のエンドポイントをグループ化
+	// Group device-related endpoints
 	deviceRoutes := router.Group("/devices")
 	{
 		deviceRoutes.POST("", deviceHandler.CreateDevice)
@@ -82,14 +82,14 @@ func main() {
 		deviceRoutes.DELETE("/:id", deviceHandler.DeleteDevice)
 	}
 
-	// --- サーバーのグレースフルシャットダウン ---
+	// --- Graceful shutdown of the server ---
 	srv := &http.Server{ //nolint:exhaustruct
 		Addr:              defaultServerPort,
 		Handler:           router,
 		ReadHeaderTimeout: serverReadHeaderTimeout,
 	}
 
-	// サーバーをゴルーチンで起動
+	// Start the server in a goroutine
 	go func() {
 		log.Println("Server starting on port", defaultServerPort, "...")
 
@@ -99,20 +99,20 @@ func main() {
 		}
 	}()
 
-	// OSのシグナルを待機 (Graceful shutdown)
+	// Wait for OS signals for a graceful shutdown.
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	log.Println("Shutting down server...")
 
-	// タイムアウト付きコンテキストでシャットダウン処理
+	// Shutdown process with a timeout context.
 	ctx, cancel := context.WithTimeout(context.Background(), serverShutdownTimeout)
-	defer cancel() // defer ensures cancel is called
+	defer cancel() // `defer` ensures `cancel` is called.
 
 	err = srv.Shutdown(ctx) // noinlineerr: avoid inline error handling
 	if err != nil {
 		log.Printf("Server forced to shutdown: %v", err)
-		// Explicitly call cancel before os.Exit to ensure deferred cleanup runs
+		// Explicitly call cancel before os.Exit to ensure deferred cleanup runs.
 		cancel()
 	}
 

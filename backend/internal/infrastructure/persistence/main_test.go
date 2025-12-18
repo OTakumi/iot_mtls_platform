@@ -19,17 +19,17 @@ import (
 var testDB *gorm.DB //nolint:gochecknoglobals
 
 func TestMain(m *testing.M) {
-	// テスト全体のセットアップ
+	// Set up the entire test suite.
 	err := setupTestDatabase()
 	if err != nil {
 		log.Fatalf("failed to set up test database: %v", err)
 	}
 
-	// 全てのテストを実行
+	// Run all tests.
 	code := m.Run()
 
-	// 後処理
-	// DB接続を閉じる
+	// Teardown.
+	// Close the database connection.
 	sqlDB, err := testDB.DB()
 	if err == nil {
 		err = sqlDB.Close()
@@ -44,22 +44,22 @@ func TestMain(m *testing.M) {
 var ErrDSNTestNotSet = errors.New("environment variable DSN_TEST is not set")
 
 func setupTestDatabase() error {
-	// 環境変数からテストDBのDSNを取得
+	// Get the test database DSN from environment variables.
 	dsnTest := os.Getenv("DSN_TEST")
 	if dsnTest == "" {
 		return ErrDSNTestNotSet
 	}
 
-	// マイグレーションの実行
+	// Run migrations.
 	migrationURL := "file://../../../../infra/db-auth/migrations"
 
-	// migrate.New の第二引数に dsnTest を直接使用
+	// Use dsnTest directly as the second argument for migrate.New.
 	mi, err := migrate.New(migrationURL, dsnTest)
 	if err != nil {
 		return fmt.Errorf("failed to create migrate instance: %w", err)
 	}
 
-	// DBの状態を一度クリアしてからマイグレーションを実行
+	// Clear the database state before running migrations.
 	err = mi.Down()
 	if err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		log.Printf("migrate down failed, but continuing test: %v", err)
@@ -70,8 +70,8 @@ func setupTestDatabase() error {
 		return fmt.Errorf("migrate up failed: %w", err)
 	}
 
-	// GORMでのDB接続
-	// ロガー設定なしのシンプルな GORM 設定
+	// Connect to the database using GORM.
+	// Simple GORM configuration with a silent logger.
 	db, err := gorm.Open(postgres.Open(dsnTest), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})

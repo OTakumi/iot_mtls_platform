@@ -314,7 +314,7 @@ func TestGetDevice(t *testing.T) {
 	}
 }
 
-// ListDevicesメソッドのテスト.
+// TestListDevices tests the ListDevices method.
 func TestListDevices(t *testing.T) {
 	t.Parallel()
 
@@ -417,7 +417,7 @@ func TestListDevices(t *testing.T) {
 	}
 }
 
-// UpdateDeviceメソッドのテスト.
+// TestUpdateDevice tests the UpdateDevice method.
 func TestUpdateDevice(t *testing.T) {
 	t.Parallel()
 
@@ -551,7 +551,7 @@ func TestUpdateDevice(t *testing.T) {
 	}
 }
 
-// DeleteDeviceメソッドのテスト.
+// TestDeleteDevice tests the DeleteDevice method.
 func TestDeleteDevice(t *testing.T) {
 	t.Parallel()
 

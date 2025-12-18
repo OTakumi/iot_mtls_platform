@@ -10,16 +10,16 @@ import (
 
 // CreateDeviceInput is the input data for creating a Device.
 type CreateDeviceInput struct {
-	HardwareID string         // 必須
-	Name       string         // オプショナル
-	Metadata   map[string]any // オプショナル
+	HardwareID string         // Required
+	Name       string         // Optional
+	Metadata   map[string]any // Optional
 }
 
 // UpdateDeviceInput is the input data for updating a Device.
 type UpdateDeviceInput struct {
 	ID       uuid.UUID
-	Name     *string        // オプショナル、nilで渡された場合は更新しない
-	Metadata map[string]any // オプショナル、nilで渡された場合は更新しない
+	Name     *string        // Optional: if nil, the name will not be updated.
+	Metadata map[string]any // Optional: if nil, the metadata will not be updated.
 }
 
 // DeviceOutput is the output data for displaying Device information.

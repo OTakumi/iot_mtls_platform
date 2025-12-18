@@ -12,20 +12,20 @@ import (
 type Device struct {
 	ID uuid.UUID `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
 
-	// デバイス固有のIDを設定する
-	// MACアドレスやデバイスIDなど
+	// HardwareID is a unique identifier for the device.
+	// e.g., MAC address or serial number.
 	HardwareID string `gorm:"uniqueIndex;not null;column:hardware_id"`
 
-	// NameはNull許容
+	// Name is an optional, user-friendly name for the device.
 	Name string `gorm:"default:null"`
 
-	// metadataには、デバイスの仕様、設置場所、デバイスバージョンなど、
-	// デバイスによって異なる情報が入力される
-	// このmetadataの内容を検索対象とすることも考えられるため、json形式で保存できるようにする
-	// デフォルト値は空のjson {}
+	// Metadata contains device-specific information, such as specifications,
+	// installation location, and firmware version.
+	// Its content is searchable, so it is stored in JSONB format.
+	// Defaults to an empty JSON object '{}'.
 	Metadata JSONBMap `gorm:"type:jsonb;default:'{}'"`
 
-	// CreatedAt, UpdatedAtという命名にすることでGORMが自動でタイムスタンプを追加する
+	// CreatedAt and UpdatedAt are automatically managed by GORM.
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -42,7 +42,7 @@ func NewDevice(hardwareID string, name *string, metadata map[string]any) (*Devic
 	newDevice := &Device{
 		ID:         uuid.Nil,
 		HardwareID: hardwareID,
-		Name:       "", // Default to empty string, to be overwritten if name is provided
+		Name:       "", // Default to an empty string, to be overwritten if a name is provided.
 		Metadata:   newMetadata,
 		CreatedAt:  time.Time{},
 		UpdatedAt:  time.Time{},

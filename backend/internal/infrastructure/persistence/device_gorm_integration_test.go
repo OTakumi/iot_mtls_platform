@@ -13,9 +13,10 @@ import (
 	"gorm.io/gorm"
 )
 
-// GORMリポジトリのCRUD操作を実際のDBで検証する結合テスト.
+// TestDeviceGormRepository_Integration performs integration tests for
+// the GORM repository's CRUD operations against a real database.
 func TestDeviceGormRepository_Integration(t *testing.T) {
-	// testDBは main_test.go で初期化される
+	// testDB is initialized in main_test.go.
 	if testDB == nil {
 		t.Fatal("testDB is not initialized")
 	}
@@ -27,19 +28,17 @@ func TestDeviceGormRepository_Integration(t *testing.T) {
 	t.Run("Save(Create) - Creates a new device", func(t *testing.T) {
 		cleanupTable(t)
 
-		// テストデータ作成
+		// Prepare test data.
 		deviceName := "test-device"
 		device, err := entity.NewDevice("hw-create-01", &deviceName, map[string]any{"key": "val"})
 		require.NoError(t, err)
 
-		// 実行
+		// Execute the method.
 		err = repo.Save(ctx, device)
-
-		// 検証
+		// Assert the results.
 		require.NoError(t, err)
 		assert.NotEqual(t, uuid.Nil, device.ID, "ID should be assigned after saving")
-
-		// DBから再取得して検証
+		// Re-fetch from DB and verify the created data.
 		foundDevice, err := repo.FindByID(ctx, device.ID)
 		require.NoError(t, err)
 		assert.NotNil(t, foundDevice)
@@ -52,17 +51,17 @@ func TestDeviceGormRepository_Integration(t *testing.T) {
 	t.Run("FindByID - Finds an existing device by ID", func(t *testing.T) {
 		cleanupTable(t)
 
-		// テストデータ作成 & 保存
+		// Prepare and save test data.
 		deviceName := "find-me"
 		savedDevice, err := entity.NewDevice("hw-find-01", &deviceName, nil)
 		require.NoError(t, err)
 		err = repo.Save(ctx, savedDevice)
 		require.NoError(t, err)
 
-		// 実行
+		// Execute.
 		foundDevice, err := repo.FindByID(ctx, savedDevice.ID)
 
-		// 検証
+		// Assert.
 		require.NoError(t, err)
 		assert.NotNil(t, foundDevice)
 		assert.Equal(t, savedDevice.ID, foundDevice.ID)
@@ -72,11 +71,11 @@ func TestDeviceGormRepository_Integration(t *testing.T) {
 	t.Run("FindByID - Returns error for non-existent ID", func(t *testing.T) {
 		cleanupTable(t)
 
-		// 実行
+		// Execute.
 		nonExistentID := uuid.New()
 		foundDevice, err := repo.FindByID(ctx, nonExistentID)
 
-		// 検証
+		// Assert.
 		require.Error(t, err)
 		require.ErrorIs(t, err, gorm.ErrRecordNotFound, "should return gorm.ErrRecordNotFound")
 		assert.Nil(t, foundDevice)
@@ -86,29 +85,29 @@ func TestDeviceGormRepository_Integration(t *testing.T) {
 	t.Run("Save(Update) - Updates an existing device", func(t *testing.T) {
 		cleanupTable(t)
 
-		// テストデータ作成 & 保存
+		// Prepare and save test data.
 		originalName := "original-name"
 		savedDevice, err := entity.NewDevice("hw-update-01", &originalName, map[string]any{"status": "inactive"})
 		require.NoError(t, err)
 		err = repo.Save(ctx, savedDevice)
 		require.NoError(t, err)
 
-		// フィールドを更新
+		// Update the fields.
 		updatedName := "updated-name"
 		savedDevice.Name = updatedName
 		savedDevice.Metadata = map[string]any{"status": "active", "version": 2}
 
-		// 実行
+		// Execute.
 		err = repo.Save(ctx, savedDevice)
 		require.NoError(t, err)
 
-		// DBから再取得して検証
+		// Re-fetch from the DB and verify.
 		foundDevice, err := repo.FindByID(ctx, savedDevice.ID)
 		require.NoError(t, err)
 		assert.Equal(t, updatedName, foundDevice.Name)
 		assert.Equal(t, entity.JSONBMap{"status": "active", "version": float64(2)},
 			foundDevice.Metadata,
-			"JSONB number type becomes float64",
+			"Note: JSON numbers are unmarshaled as float64 in Go.",
 		)
 	})
 
@@ -116,18 +115,18 @@ func TestDeviceGormRepository_Integration(t *testing.T) {
 	t.Run("Delete - Deletes an existing device", func(t *testing.T) {
 		cleanupTable(t)
 
-		// テストデータ作成 & 保存
+		// Prepare and save test data.
 		deviceName := "delete-me"
 		savedDevice, err := entity.NewDevice("hw-delete-01", &deviceName, nil)
 		require.NoError(t, err)
 		err = repo.Save(ctx, savedDevice)
 		require.NoError(t, err)
 
-		// 実行
+		// Execute.
 		err = repo.Delete(ctx, savedDevice.ID)
 		require.NoError(t, err)
 
-		// DBから再取得して、見つからないことを確認
+		// Verify that re-fetching from the DB fails (record not found).
 		_, err = repo.FindByID(ctx, savedDevice.ID)
 		require.Error(t, err)
 		require.ErrorIs(t, err, gorm.ErrRecordNotFound)

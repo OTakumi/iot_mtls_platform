@@ -8,16 +8,16 @@ import (
 	"github.com/google/uuid"
 )
 
-// DeviceRepository Deviceエンティティの永続化を抽象化するインターフェース.
+// DeviceRepository defines the interface for persisting Device entities.
 type DeviceRepository interface {
-	// 新しいDeviceエンティティを保存または既存のエンティティを更新
+	// Save creates a new Device or updates an existing one.
 	Save(ctx context.Context, device *entity.Device) error
-	// 指定されたUUIDを持つDeviceエンティティを検索
+	// FindByID retrieves a Device by its UUID.
 	FindByID(ctx context.Context, id uuid.UUID) (*entity.Device, error)
-	// 指定されたHardwareIDを持つDeviceエンティティを検索
+	// FindByHardwareID retrieves a Device by its hardware ID.
 	FindByHardwareID(ctx context.Context, hardwareID string) (*entity.Device, error)
-	// 全てのDeviceエンティティを取得
+	// FindAll retrieves all Device entities.
 	FindAll(ctx context.Context) ([]*entity.Device, error)
-	// 指定されたUUIDを持つDeviceエンティティを削除
+	// Delete removes a Device by its UUID.
 	Delete(ctx context.Context, id uuid.UUID) error
 }

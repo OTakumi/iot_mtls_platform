@@ -31,7 +31,7 @@ test: format lint
 	@echo "==> Running tests..."
 	$(GOTEST) $(LINT_TARGETS)
 
-# golangci-lint is not installed. Please install it to run linting.
+# If golangci-lint is not installed, linting will fail. Please install it to run linting.
 # go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 lint:
 	@echo "==> Running linter..."

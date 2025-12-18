@@ -11,7 +11,7 @@ import (
 	"backend/internal/domain/repository"
 )
 
-// DeviceGormRepository is a GORM implementation of the DeviceRepository interface.
+// DeviceGormRepository is the GORM implementation of the DeviceRepository.
 type DeviceGormRepository struct {
 	db *gorm.DB
 }
@@ -23,16 +23,16 @@ func NewDeviceGormRepository(db *gorm.DB) repository.DeviceRepository {
 	return &DeviceGormRepository{db: db}
 }
 
-// Save saves a new Device entity or updates an existing one.
+// Save creates a new device or updates an existing one.
 func (r *DeviceGormRepository) Save(ctx context.Context, device *entity.Device) error {
-	// GORMのSaveメソッドは、主キーが存在すれば更新、なければ新規作成
+	// GORM's Save method handles both creation (if primary key is zero) and update.
 	return r.db.WithContext(ctx).Save(device).Error
 }
 
-// FindByID finds a Device entity by its UUID.
+// FindByID finds a device by its UUID.
 func (r *DeviceGormRepository) FindByID(ctx context.Context, id uuid.UUID) (*entity.Device, error) {
 	var device entity.Device
-	// IDで検索し、レコードが見つからない場合はgorm.ErrRecordNotFoundを返す
+	// It returns `gorm.ErrRecordNotFound` if no record is found.
 	err := r.db.WithContext(ctx).First(&device, "id = ?", id).Error
 	if err != nil {
 		return nil, err
@@ -41,10 +41,10 @@ func (r *DeviceGormRepository) FindByID(ctx context.Context, id uuid.UUID) (*ent
 	return &device, nil
 }
 
-// FindByHardwareID finds a Device entity by its HardwareID.
+// FindByHardwareID finds a device by its hardware ID.
 func (r *DeviceGormRepository) FindByHardwareID(ctx context.Context, hardwareID string) (*entity.Device, error) {
 	var device entity.Device
-	// HardwareIDで検索し、レコードが見つからない場合はgorm.ErrRecordNotFoundを返す
+	// It returns `gorm.ErrRecordNotFound` if no record is found.
 	err := r.db.WithContext(ctx).Where("hardware_id = ?", hardwareID).First(&device).Error
 	if err != nil {
 		return nil, err
@@ -53,10 +53,10 @@ func (r *DeviceGormRepository) FindByHardwareID(ctx context.Context, hardwareID 
 	return &device, nil
 }
 
-// FindAll finds all Device entities.
+// FindAll retrieves all devices.
 func (r *DeviceGormRepository) FindAll(ctx context.Context) ([]*entity.Device, error) {
 	var devices []*entity.Device
-	// 全てのレコードを取得
+	// It returns an empty slice if no devices are found.
 	err := r.db.WithContext(ctx).Find(&devices).Error
 	if err != nil {
 		return nil, err
@@ -65,10 +65,10 @@ func (r *DeviceGormRepository) FindAll(ctx context.Context) ([]*entity.Device, e
 	return devices, nil
 }
 
-// Delete deletes a Device entity by its UUID.
+// Delete removes a device by its UUID.
 func (r *DeviceGormRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	// IDでレコードを削除
-	// GORMのDeleteは、削除対象が見つからなくてもエラーを返さず、RowsAffectedが0になるだけ
+	// It deletes a record by its primary key.
+	// If the record to be deleted is not found, GORM does not return an error, but RowsAffected will be 0.
 	result := r.db.WithContext(ctx).Where("id = ?", id).Delete(&entity.Device{}) //nolint:exhaustruct
 	if result.Error != nil {
 		return result.Error

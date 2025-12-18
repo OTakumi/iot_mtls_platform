@@ -6,11 +6,10 @@ import (
 	"fmt"
 )
 
-// JSONBMap は JSONB カラム用のカスタムマップ型です。
-// map[string]any のエイリアスであり、sql.Scanner および driver.Valuer インターフェースを実装します。
+// JSONBMap is a custom type for `map[string]any` to handle JSONB database columns.
 type JSONBMap map[string]any
 
-// Scan はデータベースの値をJSONBMapにスキャンします。
+// Scan implements the sql.Scanner interface, allowing the type to read from a database.
 func (j *JSONBMap) Scan(value any) error {
 	if value == nil {
 		*j = make(JSONBMap)
@@ -43,12 +42,12 @@ func (j *JSONBMap) Scan(value any) error {
 	return nil
 }
 
-// Value はJSONBMapの値をデータベースに保存できる形式に変換します。
+// Value implements the driver.Valuer interface, allowing the type to be written to a database.
 func (j *JSONBMap) Value() (driver.Value, error) {
 	if j == nil || *j == nil {
 		return nil, nil //nolint:nilnil
 	}
-	// 空のマップは空のJSONオブジェクトとして保存
+	// Empty maps are marshaled as empty JSON objects.
 	if len(*j) == 0 {
 		return "{}", nil
 	}
