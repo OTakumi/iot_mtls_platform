@@ -124,18 +124,7 @@ func (uc *deviceUsecase) UpdateDevice(ctx context.Context, input UpdateDeviceInp
 
 // DeleteDevice 指定されたIDのDeviceを削除.
 func (uc *deviceUsecase) DeleteDevice(ctx context.Context, id uuid.UUID) error {
-	// 削除対象の存在チェック
-	device, err := uc.deviceRepo.FindByID(ctx, id)
-	if err != nil {
-		return fmt.Errorf("%w: %w", ErrDBFindByID, err)
-	}
-
-	if device == nil {
-		return entity.ErrDeviceNotFound // デバイスが見つからない場合
-	}
-
-	// デバイスが存在する場合のみ削除を実行
-	err = uc.deviceRepo.Delete(ctx, id)
+	err := uc.deviceRepo.Delete(ctx, id)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrDBDelete, err)
 	}

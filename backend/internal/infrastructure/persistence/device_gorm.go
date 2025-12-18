@@ -69,5 +69,14 @@ func (r *DeviceGormRepository) FindAll(ctx context.Context) ([]*entity.Device, e
 func (r *DeviceGormRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	// IDでレコードを削除
 	// GORMのDeleteは、削除対象が見つからなくてもエラーを返さず、RowsAffectedが0になるだけ
-	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&entity.Device{}).Error //nolint:exhaustruct
+	result := r.db.WithContext(ctx).Where("id = ?", id).Delete(&entity.Device{}) //nolint:exhaustruct
+	if result.Error != nil {
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return entity.ErrDeviceNotFound
+	}
+
+	return nil
 }
